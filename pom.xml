@@ -28,6 +28,7 @@
     <packaging>pom</packaging>
 
     <modules>
+        <module>datatypes/java</module>
         <module>storage/api</module>
         <module>storage/connectors</module>
         <module>core</module>
@@ -36,11 +37,10 @@
         <module>docs/coverage/java</module>
         <module>common</module>
         <module>common-test</module>
-        <module>datatypes/java</module>
     </modules>
 
     <properties>
-        <revision>0.9.0-SNAPSHOT</revision>
+        <revision>0.10.0-SNAPSHOT</revision>
         <github.url>https://github.com/feast-dev/feast</github.url>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
