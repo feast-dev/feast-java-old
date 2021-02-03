@@ -36,6 +36,7 @@
         <module>docs/coverage/java</module>
         <module>common</module>
         <module>common-test</module>
+        <module>datatypes/java</module>
     </modules>
 
     <properties>
