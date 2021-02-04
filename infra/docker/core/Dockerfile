@@ -7,6 +7,7 @@ FROM maven:3.6-jdk-11 as builder
 WORKDIR /build
 
 COPY pom.xml .
+COPY datatypes/java/pom.xml datatypes/java/pom.xml
 COPY common/pom.xml common/pom.xml
 COPY core/pom.xml core/pom.xml
 COPY serving/pom.xml serving/pom.xml
@@ -15,6 +16,7 @@ COPY storage/connectors/pom.xml storage/connectors/pom.xml
 COPY storage/connectors/redis/pom.xml storage/connectors/redis/pom.xml
 COPY sdk/java/pom.xml sdk/java/pom.xml
 COPY docs/coverage/java/pom.xml docs/coverage/java/pom.xml
+COPY deps/feast/protos/ deps/feast/protos/
 
 # Setting Maven repository .m2 directory relative to /build folder gives the
 # user to optionally use cached repository when building the image by copying
