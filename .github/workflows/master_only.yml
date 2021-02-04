@@ -24,6 +24,8 @@ jobs:
         with:
           version: '290.0.1'
           export_default_credentials: true
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
       - run: gcloud auth configure-docker --quiet
       - name: Get m2 cache
         run: |
