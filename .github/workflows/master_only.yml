@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - initial_move # remove after initial_move PR merged
     tags:
       - 'v*.*.*'
 
@@ -43,10 +42,4 @@ jobs:
           if [ ${GITHUB_REF#refs/*/} == "master" ]; then
             docker tag gcr.io/kf-feast/feast-${{ matrix.component }}:${GITHUB_SHA} gcr.io/kf-feast/feast-${{ matrix.component }}:develop
             docker push gcr.io/kf-feast/feast-${{ matrix.component }}:develop
-          fi
-      - name: Push test-development Docker image # remove after initial_move PR merged
-        run: |
-          if [ ${GITHUB_REF#refs/*/} == "initial_move" ]; then
-            docker tag gcr.io/kf-feast/feast-${{ matrix.component }}:${GITHUB_SHA} gcr.io/kf-feast/feast-${{ matrix.component }}:test-develop
-            docker push gcr.io/kf-feast/feast-${{ matrix.component }}:test-develop
           fi
