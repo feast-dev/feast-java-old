@@ -152,7 +152,7 @@ jobs:
       - name: Remove previous Helm
         run: sudo rm -rf $(which helm)
       - name: Install Helm
-        run: ./infra/scripts/validate-helm-chart-publish.sh
+        run: ./infra/scripts/install-helm.sh
       - name: Validate all version consistency
         run: ./infra/scripts/validate-helm-chart-versions.sh $VERSION_WITHOUT_PREFIX
       - name: Publish Helm charts
