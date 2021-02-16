@@ -132,3 +132,28 @@ jobs:
           echo -n ${{ secrets.GPG_PRIVATE_KEY }} > /etc/gpg/private-key
           echo -n ${{ secrets.MAVEN_SETTINGS }} > /root/.m2/settings.xml
           infra/scripts/publish-java-sdk.sh --revision ${VERSION_WITHOUT_PREFIX}
+
+
+  publish-helm-charts:
+    runs-on:  ubuntu-latest
+    needs: get-version
+    env:
+      HELM_VERSION: v2.17.0
+      VERSION_WITHOUT_PREFIX: ${{ needs.get-version.outputs.version_without_prefix }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+        with:
+          version: '290.0.1'
+          export_default_credentials: true
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+      - run: gcloud auth configure-docker --quiet
+      - name: Remove previous Helm
+        run: sudo rm -rf $(which helm)
+      - name: Install Helm
+        run: ./scripts/validate-helm-chart-publish.sh
+      - name: Validate all version consistency
+        run: ./scripts/validate-helm-chart-versions.sh $VERSION_WITHOUT_PREFIX
+      - name: Publish Helm charts
+        run: ./scripts/push-helm-charts.sh $VERSION_WITHOUT_PREFIX
