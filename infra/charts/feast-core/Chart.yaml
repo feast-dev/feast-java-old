@@ -2,7 +2,7 @@ apiVersion: v1
 description: "Feast Core: Feature registry for Feast."
 name: feast-core
 version: 0.25.0
-appVersion: v0.9.2
+appVersion: 0.25.0
 keywords:
 - machine learning
 - big data
