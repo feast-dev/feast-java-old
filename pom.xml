@@ -566,10 +566,6 @@
                         <licenseHeader>
                             <content>${license.content}</content>
                         </licenseHeader>
-                        <scalafmt>
-                            <version>2.7.2</version>
-                            <file>${parent.basedir}/.scalafmt.conf</file>
-                        </scalafmt>
                     </scala>
                 </configuration>
                 <executions>
