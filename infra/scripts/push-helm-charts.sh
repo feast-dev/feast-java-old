@@ -7,10 +7,10 @@ if [ $# -ne 1 ]; then
     exit 1
 fi
 
-bucket=gs://feast-helm-charts
+bucket=gs://feast-helm-charts/
 repo_url=https://feast-helm-charts.storage.googleapis.com/
 
-helm plugin install https://github.com/hayorov/helm-gcs.git || true
+helm plugin install https://github.com/hayorov/helm-gcs.git --version 0.2.2 || true
 
 helm repo add feast-helm-chart-repo $bucket
 
