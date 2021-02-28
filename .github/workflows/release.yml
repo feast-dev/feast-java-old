@@ -131,10 +131,10 @@ jobs:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           MAVEN_SETTINGS: ${{ secrets.MAVEN_SETTINGS }}
         run: |
-          echo -n "$GPG_PUBLIC_KEY" > /root/public-key
-          echo -n "$GPG_PRIVATE_KEY" > /root/private-key
-          echo -n "$MAVEN_SETTINGS" > /root/.m2/settings.xml
-          infra/scripts/publish-java-sdk.sh --revision ${VERSION_WITHOUT_PREFIX} --gpg-key-import-dir /root
+          sudo echo -n "$GPG_PUBLIC_KEY" > /root/public-key
+          sudo echo -n "$GPG_PRIVATE_KEY" > /root/private-key
+          sudo echo -n "$MAVEN_SETTINGS" > /root/.m2/settings.xml
+          sudo infra/scripts/publish-java-sdk.sh --revision ${VERSION_WITHOUT_PREFIX} --gpg-key-import-dir /root
 
   publish-helm-charts:
     runs-on:  ubuntu-latest
