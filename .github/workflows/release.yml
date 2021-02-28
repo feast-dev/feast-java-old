@@ -62,7 +62,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
       - name: Login to DockerHub
-        uses: docker/login-action@v1 
+        uses: docker/login-action@v1
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -91,7 +91,7 @@ jobs:
             -f infra/docker/${{ matrix.component }}/Dockerfile .
           docker push gcr.io/kf-feast/feast-${{ matrix.component }}:${VERSION_WITHOUT_PREFIX}
           docker push feastdev/feast-${{ matrix.component }}:${VERSION_WITHOUT_PREFIX}
-          
+
           echo "Only push to latest tag if tag is the highest semver version $HIGHEST_SEMVER_TAG"
           if [ "${VERSION_WITHOUT_PREFIX}" = "${HIGHEST_SEMVER_TAG:1}" ]
           then
@@ -127,12 +127,14 @@ jobs:
       - name: Publish java sdk
         env:
           VERSION_WITHOUT_PREFIX: ${{ needs.get-version.outputs.version_without_prefix }}
+          GPG_PUBLIC_KEY: ${{ secrets.GPG_PUBLIC_KEY }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          MAVEN_SETTINGS: ${{ secrets.MAVEN_SETTINGS }}
         run: |
-          echo -n ${{ secrets.GPG_PUBLIC_KEY }} > /etc/gpg/public-key
-          echo -n ${{ secrets.GPG_PRIVATE_KEY }} > /etc/gpg/private-key
-          echo -n ${{ secrets.MAVEN_SETTINGS }} > /root/.m2/settings.xml
+          echo -n "$GPG_PUBLIC_KEY" > /etc/gpg/public-key
+          echo -n "$GPG_PRIVATE_KEY" > /etc/gpg/private-key
+          echo -n "$MAVEN_SETTINGS" > /root/.m2/settings.xml
           infra/scripts/publish-java-sdk.sh --revision ${VERSION_WITHOUT_PREFIX}
-
 
   publish-helm-charts:
     runs-on:  ubuntu-latest
