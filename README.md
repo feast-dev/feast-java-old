@@ -3,32 +3,31 @@
 
 ### Overview
 
-This repository contains the following Feast components
-* Feast Core: The central feature registry used to define and manage entities and features
-* Feast Serving: A service used to serve the latest feature values to models
-* Feast Java SDK: A client used to retrieve features from Feast Serving
-* Helm Charts: The repository also contains Helm charts to deploy Feast Core and Feast Serving into a Kubernetes cluster
+This repository contains the following Feast components.
+* Feast Core: The central feature registry used to define and manage entities and features.
+* Feast Serving: A service used to serve the latest feature values to models.
+* Feast Java SDK: A client used to retrieve features from Feast Serving.
+* Helm Charts: The repository also contains Helm charts to deploy Feast Core and Feast Serving into a Kubernetes cluster.
 
 ### Architecture
 
 ![](docs/architecture.png)
 
 
-* Feast Core has a dependency on Postgres
-* Feast Serving has a dependency on an online store (database) for retrieving features (like Redis)
-* Feast Serving has a dependency on Feast Core
-* The process of ingesting data into the online store (Redis) is decoupled from the process of reading from it. Please see [Feast Spark](https://github.com/feast-dev/feast-spark) for more details about ingesting data into the online store.
+* Feast Core has a dependency on Postgres.
+* Feast Serving has a dependency on an online store (Redis) for retrieving features. The process of ingesting data into the online store (Redis) is decoupled from the process of reading from it. Please see [Feast Spark](https://github.com/feast-dev/feast-spark) for more details about ingesting data into the online store.
+* Feast Serving has a dependency on Feast Core.
 * The Go and Python Clients are not a part of this repository.
 
 ### Running tests
 
-To run unit tests
+To run unit tests:
 
 ```
 make test-java
 ```
 
-To run integration tests
+To run integration tests:
 
 ```
 make test-java-integration
