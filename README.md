@@ -1,4 +1,5 @@
 # Feast Java components
+[![complete](https://github.com/feast-dev/feast-java/actions/workflows/complete.yml/badge.svg)](https://github.com/feast-dev/feast-java/actions/workflows/complete.yml)
 
 ## Overview
 
@@ -11,3 +12,36 @@ This repository contains the following Feast components
 # Architecture
 
 ![](docs/architecture.png)
+
+
+* Feast Core has a dependency on Postgres
+* Feast Serving has a dependency on an online store (database) for retrieving features (like Redis)
+* Feast Serving has a dependency on Feast Core
+* The process of ingesting data into the online store (Redis) is decoupled from the process of reading from it. Please see [Feast Spark](https://github.com/feast-dev/feast-spark) for more details about ingesting data into the online store.
+* The Go and Python Clients are not a part of this repository.
+
+# Running tests
+
+To run unit tests
+
+```
+make test-java
+```
+
+To run integration tests
+
+```
+make test-java-integration
+```
+
+# Building docker images
+
+In order to build development versions of the Core and Serving images, please run the following commands:
+
+```
+build-docker REGISTRY=gcr.io/kf-feast VERSION=develop
+```
+
+# Installing using Helm
+
+Please see the Helm charts in [charts](infra/charts).
