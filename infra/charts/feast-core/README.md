@@ -2,7 +2,7 @@ feast-core
 ==========
 Feast Core: Feature registry for Feast.
 
-Current chart version is `0.25.0`
+Current chart version is `0.26.0`
 
 Source code can be found [here](https://github.com/feast-dev/feast-java)
 
