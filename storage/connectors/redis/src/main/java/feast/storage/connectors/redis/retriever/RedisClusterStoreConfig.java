@@ -16,11 +16,10 @@
  */
 package feast.storage.connectors.redis.retriever;
 
-import feast.storage.api.retriever.StoreConfig;
 import io.lettuce.core.ReadFrom;
 import java.time.Duration;
 
-public class RedisClusterStoreConfig implements StoreConfig {
+public class RedisClusterStoreConfig {
   private final String connectionString;
   private final ReadFrom readFrom;
   private final Duration timeout;

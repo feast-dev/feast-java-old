@@ -16,9 +16,7 @@
  */
 package feast.storage.connectors.redis.retriever;
 
-import feast.storage.api.retriever.StoreConfig;
-
-public class RedisStoreConfig implements StoreConfig {
+public class RedisStoreConfig {
   private final String host;
   private final Integer port;
   private final Boolean ssl;
