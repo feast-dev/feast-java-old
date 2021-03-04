@@ -85,7 +85,7 @@ public class RedisClusterClient implements RedisClientAdapter {
 
     StatefulRedisClusterConnection<byte[], byte[]> connection =
         client.connect(new ByteArrayCodec());
-    connection.setReadFrom(config.getmReadFrom());
+    connection.setReadFrom(config.getReadFrom());
 
     return new Builder(connection).build();
   }
