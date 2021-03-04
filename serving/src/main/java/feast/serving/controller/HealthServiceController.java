@@ -16,7 +16,6 @@
  */
 package feast.serving.controller;
 
-import feast.proto.core.StoreProto.Store;
 import feast.proto.serving.ServingAPIProto.GetFeastServingInfoRequest;
 import feast.serving.interceptors.GrpcMonitoringInterceptor;
 import feast.serving.service.ServingServiceV2;
@@ -51,7 +50,6 @@ public class HealthServiceController extends HealthImplBase {
     // Implement similary for batch service.
 
     try {
-      Store store = specService.getStore();
       servingService.getFeastServingInfo(GetFeastServingInfoRequest.getDefaultInstance());
       responseObserver.onNext(
           HealthCheckResponse.newBuilder().setStatus(ServingStatus.SERVING).build());
