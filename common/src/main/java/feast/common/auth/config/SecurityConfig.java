@@ -19,6 +19,7 @@ package feast.common.auth.config;
 import feast.common.auth.authentication.DefaultJwtAuthenticationProvider;
 import feast.common.auth.authorization.AuthorizationProvider;
 import feast.common.auth.providers.http.HttpAuthorizationProvider;
+import feast.common.auth.providers.keto.KetoAuthorizationProvider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -107,12 +108,40 @@ public class SecurityConfig {
   AuthorizationProvider authorizationProvider() {
     if (securityProperties.getAuthentication().isEnabled()
         && securityProperties.getAuthorization().isEnabled()) {
+      // Merge authentication and authorization options to create HttpAuthorizationProvider.
+      Map<String, String> options = securityProperties.getAuthorization().getOptions();
+
+      options.putAll(securityProperties.getAuthentication().getOptions());
       switch (securityProperties.getAuthorization().getProvider()) {
         case "http":
-          // Merge authenticatoin and authorization options to create HttpAuthorizationProvider.
-          Map<String, String> options = securityProperties.getAuthorization().getOptions();
-          options.putAll(securityProperties.getAuthentication().getOptions());
           return new HttpAuthorizationProvider(options);
+        case "keto":
+          String subjectClaim =
+              options.get(SecurityProperties.AuthenticationProperties.SUBJECT_CLAIM);
+          String flavor = options.get("flavor");
+          String action = options.get("action");
+          String subjectPrefix = options.get("subjectPrefix");
+          String resourcePrefix = options.get("resourcePrefix");
+
+          KetoAuthorizationProvider.Builder builder =
+              new KetoAuthorizationProvider.Builder(options.get("authorizationUrl"));
+          if (subjectClaim != null) {
+            builder = builder.withSubjectClaim(subjectClaim);
+          }
+          if (flavor != null) {
+            builder = builder.withFlavor(flavor);
+          }
+          if (action != null) {
+            builder = builder.withAction(action);
+          }
+          if (subjectPrefix != null) {
+            builder = builder.withSubjectPrefix(subjectPrefix);
+          }
+          if (resourcePrefix != null) {
+            builder = builder.withResourcePrefix(resourcePrefix);
+          }
+
+          return builder.build();
         default:
           throw new IllegalArgumentException(
               "Please configure an Authorization Provider if you have enabled authorization.");
