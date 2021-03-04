@@ -26,7 +26,6 @@ import feast.proto.core.CoreServiceProto.ListProjectsRequest;
 import feast.proto.core.FeatureProto;
 import feast.proto.core.FeatureTableProto.FeatureTable;
 import feast.proto.core.FeatureTableProto.FeatureTableSpec;
-import feast.proto.core.StoreProto;
 import feast.proto.core.StoreProto.Store;
 import feast.proto.serving.ServingAPIProto;
 import feast.serving.exception.SpecRetrievalException;
@@ -69,9 +68,8 @@ public class CachedSpecService {
           ImmutablePair<String, ServingAPIProto.FeatureReferenceV2>, FeatureProto.FeatureSpecV2>
       featureCache;
 
-  public CachedSpecService(CoreSpecService coreService, StoreProto.Store store) {
+  public CachedSpecService(CoreSpecService coreService) {
     this.coreService = coreService;
-    this.store = coreService.registerStore(store);
 
     CacheLoader<ImmutablePair<String, String>, FeatureTableSpec> featureTableCacheLoader =
         CacheLoader.from(k -> retrieveSingleFeatureTable(k.getLeft(), k.getRight()));

@@ -140,9 +140,6 @@ public class FeastProperties {
    */
   private List<Store> stores = new ArrayList<>();
 
-  /* Job Store properties to retain state of async jobs. */
-  private JobStoreProperties jobStore;
-
   /* Metric tracing properties. */
   private TracingProperties tracing;
 

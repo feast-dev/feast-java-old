@@ -32,7 +32,6 @@ import feast.proto.core.CoreServiceProto.ListProjectsRequest;
 import feast.proto.core.CoreServiceProto.ListProjectsResponse;
 import feast.proto.core.FeatureTableProto;
 import feast.proto.core.FeatureTableProto.FeatureTableSpec;
-import feast.proto.core.StoreProto.Store;
 import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
 import feast.proto.types.ValueProto;
 import feast.serving.specs.CachedSpecService;
@@ -44,8 +43,6 @@ import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 
 public class CachedSpecServiceTest {
-
-  private Store store;
 
   @Rule public final ExpectedException expectedException = ExpectedException.none();
 
@@ -62,8 +59,6 @@ public class CachedSpecServiceTest {
   @Before
   public void setUp() {
     initMocks(this);
-
-    this.store = Store.newBuilder().build();
 
     this.setupProject("default");
     this.featureTableEntities = ImmutableList.of("entity1");
@@ -94,8 +89,7 @@ public class CachedSpecServiceTest {
 
     this.setupFeatureTableAndProject("default");
 
-    when(this.coreService.registerStore(store)).thenReturn(store);
-    cachedSpecService = new CachedSpecService(this.coreService, this.store);
+    cachedSpecService = new CachedSpecService(this.coreService);
   }
 
   private void setupProject(String project) {
@@ -123,13 +117,6 @@ public class CachedSpecServiceTest {
   @Test
   public void shouldRegisterStoreWithCore() {
     verify(coreService, times(1)).registerStore(cachedSpecService.getStore());
-  }
-
-  @Test
-  public void shouldPopulateAndReturnStore() {
-    cachedSpecService.populateCache();
-    Store actual = cachedSpecService.getStore();
-    assertThat(actual, equalTo(store));
   }
 
   @Test

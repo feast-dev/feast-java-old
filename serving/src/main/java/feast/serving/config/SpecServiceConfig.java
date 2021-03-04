@@ -18,7 +18,6 @@ package feast.serving.config;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.protobuf.InvalidProtocolBufferException;
-import feast.proto.core.StoreProto;
 import feast.serving.specs.CachedSpecService;
 import feast.serving.specs.CoreSpecService;
 import io.grpc.CallCredentials;
@@ -61,13 +60,11 @@ public class SpecServiceConfig {
   }
 
   @Bean
-  public CachedSpecService specService(
-      FeastProperties feastProperties, ObjectProvider<CallCredentials> callCredentials)
+  public CachedSpecService specService(ObjectProvider<CallCredentials> callCredentials)
       throws InvalidProtocolBufferException, JsonProcessingException {
     CoreSpecService coreService =
         new CoreSpecService(feastCoreHost, feastCorePort, callCredentials);
-    StoreProto.Store storeProto = feastProperties.getActiveStore().toProto();
-    CachedSpecService cachedSpecStorage = new CachedSpecService(coreService, storeProto);
+    CachedSpecService cachedSpecStorage = new CachedSpecService(coreService);
     try {
       cachedSpecStorage.populateCache();
     } catch (Exception e) {
