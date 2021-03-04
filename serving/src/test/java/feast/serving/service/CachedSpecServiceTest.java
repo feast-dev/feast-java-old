@@ -18,8 +18,6 @@ package feast.serving.service;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.MockitoAnnotations.initMocks;
 
@@ -112,11 +110,6 @@ public class CachedSpecServiceTest {
                 .addTables(featureTable1)
                 .addTables(featureTable2)
                 .build());
-  }
-
-  @Test
-  public void shouldRegisterStoreWithCore() {
-    verify(coreService, times(1)).registerStore(cachedSpecService.getStore());
   }
 
   @Test
