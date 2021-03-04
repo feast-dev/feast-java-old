@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * Copyright 2018-2020 The Feast Authors
+ * Copyright 2018-2021 The Feast Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package feast.storage.connectors.redis.serializer;
+package feast.storage.api.retriever;
 
-import feast.proto.storage.RedisProto.RedisKeyV2;
-
-public class RedisKeyProtoSerializerV2 implements RedisKeySerializerV2 {
-
-  public byte[] serialize(RedisKeyV2 redisKey) {
-    return redisKey.toByteArray();
-  }
-}
+public interface StoreConfig {}

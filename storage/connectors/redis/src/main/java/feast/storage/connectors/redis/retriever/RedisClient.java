@@ -16,7 +16,6 @@
  */
 package feast.storage.connectors.redis.retriever;
 
-import feast.proto.core.StoreProto;
 import io.lettuce.core.KeyValue;
 import io.lettuce.core.RedisFuture;
 import io.lettuce.core.RedisURI;
@@ -46,7 +45,7 @@ public class RedisClient implements RedisClientAdapter {
     this.asyncCommands.setAutoFlushCommands(false);
   }
 
-  public static RedisClientAdapter create(StoreProto.Store.RedisConfig config) {
+  public static RedisClientAdapter create(RedisStoreConfig config) {
 
     RedisURI uri = RedisURI.create(config.getHost(), config.getPort());
 

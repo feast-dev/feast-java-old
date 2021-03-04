@@ -21,24 +21,18 @@ package feast.serving.config;
 // https://www.baeldung.com/configuration-properties-in-spring-boot
 // https://docs.spring.io/spring-boot/docs/current/reference/html/boot-features-external-config.html#boot-features-external-config-typesafe-configuration-properties
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.protobuf.InvalidProtocolBufferException;
-import com.google.protobuf.util.JsonFormat;
 import feast.common.auth.config.SecurityProperties;
 import feast.common.auth.config.SecurityProperties.AuthenticationProperties;
 import feast.common.auth.config.SecurityProperties.AuthorizationProperties;
 import feast.common.auth.credentials.CoreAuthenticationProperties;
 import feast.common.logging.config.LoggingProperties;
-import feast.proto.core.StoreProto;
+import feast.storage.connectors.redis.retriever.RedisClusterStoreConfig;
+import feast.storage.connectors.redis.retriever.RedisStoreConfig;
+import io.lettuce.core.ReadFrom;
+import java.time.Duration;
 import java.util.*;
-import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
-import javax.validation.ConstraintViolation;
-import javax.validation.ConstraintViolationException;
-import javax.validation.Validation;
-import javax.validation.Validator;
-import javax.validation.ValidatorFactory;
+import javax.validation.*;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Positive;
@@ -259,8 +253,6 @@ public class FeastProperties {
 
     private Map<String, String> config = new HashMap<>();
 
-    private List<Subscription> subscriptions = new ArrayList<>();
-
     /**
      * Gets name of this store. This is unique to this specific instance.
      *
@@ -280,12 +272,12 @@ public class FeastProperties {
     }
 
     /**
-     * Gets the store type. Example are REDIS or BIGQUERY
+     * Gets the store type. Example are REDIS or REDIS_CLUSTER
      *
      * @return the store type as a String.
      */
-    public String getType() {
-      return type;
+    public StoreType getType() {
+      return StoreType.valueOf(this.type);
     }
 
     /**
@@ -295,64 +287,6 @@ public class FeastProperties {
      */
     public void setType(String type) {
       this.type = type;
-    }
-
-    /**
-     * Converts this {@link Store} to a {@link StoreProto.Store}
-     *
-     * @return {@link StoreProto.Store} with configuration set
-     * @throws InvalidProtocolBufferException the invalid protocol buffer exception
-     * @throws JsonProcessingException the json processing exception
-     */
-    public StoreProto.Store toProto()
-        throws InvalidProtocolBufferException, JsonProcessingException {
-      List<Subscription> subscriptions = getSubscriptions();
-      List<StoreProto.Store.Subscription> subscriptionProtos =
-          subscriptions.stream().map(Subscription::toProto).collect(Collectors.toList());
-
-      StoreProto.Store.Builder storeProtoBuilder =
-          StoreProto.Store.newBuilder()
-              .setName(name)
-              .setType(StoreProto.Store.StoreType.valueOf(type))
-              .addAllSubscriptions(subscriptionProtos);
-
-      ObjectMapper jsonWriter = new ObjectMapper();
-
-      // TODO: All of this logic should be moved to the store layer. Only a Map<String, String>
-      // should be sent to a store and it should do its own validation.
-      switch (StoreProto.Store.StoreType.valueOf(type)) {
-        case REDIS_CLUSTER:
-          StoreProto.Store.RedisClusterConfig.Builder redisClusterConfig =
-              StoreProto.Store.RedisClusterConfig.newBuilder();
-          JsonFormat.parser().merge(jsonWriter.writeValueAsString(config), redisClusterConfig);
-          return storeProtoBuilder.setRedisClusterConfig(redisClusterConfig.build()).build();
-        case REDIS:
-          StoreProto.Store.RedisConfig.Builder redisConfig =
-              StoreProto.Store.RedisConfig.newBuilder();
-          JsonFormat.parser().merge(jsonWriter.writeValueAsString(config), redisConfig);
-          return storeProtoBuilder.setRedisConfig(redisConfig.build()).build();
-        default:
-          throw new InvalidProtocolBufferException("Invalid store set");
-      }
-    }
-
-    /**
-     * Get the subscriptions to this specific store. The subscriptions indicate which feature sets a
-     * store subscribes to.
-     *
-     * @return List of subscriptions.
-     */
-    public List<Subscription> getSubscriptions() {
-      return subscriptions;
-    }
-
-    /**
-     * Sets the store specific configuration. See getSubscriptions() for more details.
-     *
-     * @param subscriptions the subscriptions list
-     */
-    public void setSubscriptions(List<Subscription> subscriptions) {
-      this.subscriptions = subscriptions;
     }
 
     /**
@@ -366,6 +300,20 @@ public class FeastProperties {
       return config;
     }
 
+    public RedisClusterStoreConfig getRedisClusterConfig() {
+      return new RedisClusterStoreConfig(
+          this.config.get("connection_string"),
+          ReadFrom.valueOf(this.config.get("read_from")),
+          Duration.parse(this.config.get("timeout")));
+    }
+
+    public RedisStoreConfig getRedisConfig() {
+      return new RedisStoreConfig(
+          this.config.get("host"),
+          Integer.valueOf(this.config.get("port")),
+          Boolean.valueOf(this.config.getOrDefault("ssl", "false")));
+    }
+
     /**
      * Sets the store config. Please protos/feast/core/Store.proto for the specific options for each
      * store.
@@ -375,129 +323,11 @@ public class FeastProperties {
     public void setConfig(Map<String, String> config) {
       this.config = config;
     }
-
-    /**
-     * The Subscription type.
-     *
-     * <p>Note: Please see protos/feast/core/CoreService.proto for details on how to subscribe to
-     * feature sets.
-     */
-    public static class Subscription {
-      /** Feast project to subscribe to. */
-      String project;
-
-      /** Feature set to subscribe to. */
-      String name;
-
-      /** Feature set versions to subscribe to. */
-      String version;
-
-      /** Project/Feature set exclude flag to subscribe to. */
-      boolean exclude;
-
-      /**
-       * Gets Feast project subscribed to.
-       *
-       * @return the project string
-       */
-      public String getProject() {
-        return project;
-      }
-
-      /**
-       * Sets Feast project to subscribe to for this store.
-       *
-       * @param project the project
-       */
-      public void setProject(String project) {
-        this.project = project;
-      }
-
-      /**
-       * Gets the feature set name to subscribe to.
-       *
-       * @return the name
-       */
-      public String getName() {
-        return name;
-      }
-
-      /**
-       * Sets the feature set name to subscribe to.
-       *
-       * @param name the name
-       */
-      public void setName(String name) {
-        this.name = name;
-      }
-
-      /**
-       * Gets the feature set version that is being subscribed to by this store.
-       *
-       * @return the version
-       */
-      public String getVersion() {
-        return version;
-      }
-
-      /**
-       * Sets the feature set version that is being subscribed to by this store.
-       *
-       * @param version the version
-       */
-      public void setVersion(String version) {
-        this.version = version;
-      }
-
-      /**
-       * Gets the exclude flag to subscribe to.
-       *
-       * @return the exclude flag
-       */
-      public boolean getExclude() {
-        return exclude;
-      }
-
-      /**
-       * Sets the exclude flag to subscribe to.
-       *
-       * @param exclude the exclude flag
-       */
-      public void setExclude(boolean exclude) {
-        this.exclude = exclude;
-      }
-
-      /**
-       * Convert this {@link Subscription} to a {@link StoreProto.Store.Subscription}.
-       *
-       * @return the store proto . store . subscription
-       */
-      public StoreProto.Store.Subscription toProto() {
-        return StoreProto.Store.Subscription.newBuilder()
-            .setName(getName())
-            .setProject(getProject())
-            .setExclude(getExclude())
-            .build();
-      }
-    }
   }
 
-  /**
-   * Gets job store properties
-   *
-   * @return the job store properties
-   */
-  public JobStoreProperties getJobStore() {
-    return jobStore;
-  }
-
-  /**
-   * Set job store properties
-   *
-   * @param jobStore Job store properties to set
-   */
-  public void setJobStore(JobStoreProperties jobStore) {
-    this.jobStore = jobStore;
+  public enum StoreType {
+    REDIS,
+    REDIS_CLUSTER;
   }
 
   /**
@@ -530,52 +360,6 @@ public class FeastProperties {
   /** Sets logging properties @@param logging the logging properties */
   public void setLogging(LoggingProperties logging) {
     this.logging = logging;
-  }
-
-  /** The type Job store properties. */
-  public static class JobStoreProperties {
-
-    /** Job Store Redis Host */
-    private String redisHost;
-
-    /** Job Store Redis Host */
-    private int redisPort;
-
-    /**
-     * Gets redis host.
-     *
-     * @return the redis host
-     */
-    public String getRedisHost() {
-      return redisHost;
-    }
-
-    /**
-     * Sets redis host.
-     *
-     * @param redisHost the redis host
-     */
-    public void setRedisHost(String redisHost) {
-      this.redisHost = redisHost;
-    }
-
-    /**
-     * Gets redis port.
-     *
-     * @return the redis port
-     */
-    public int getRedisPort() {
-      return redisPort;
-    }
-
-    /**
-     * Sets redis port.
-     *
-     * @param redisPort the redis port
-     */
-    public void setRedisPort(int redisPort) {
-      this.redisPort = redisPort;
-    }
   }
 
   /** Trace metric collection properties */
