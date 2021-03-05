@@ -24,7 +24,6 @@ import feast.proto.core.CoreServiceProto.ListProjectsRequest;
 import feast.proto.core.CoreServiceProto.ListProjectsResponse;
 import feast.proto.core.CoreServiceProto.UpdateStoreRequest;
 import feast.proto.core.CoreServiceProto.UpdateStoreResponse;
-import feast.proto.core.StoreProto.Store;
 import io.grpc.CallCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -51,26 +50,6 @@ public class CoreSpecService {
 
   public UpdateStoreResponse updateStore(UpdateStoreRequest updateStoreRequest) {
     return blockingStub.updateStore(updateStoreRequest);
-  }
-
-  /**
-   * Register the given store entry in Feast Core. If store already exists in Feast Core, updates
-   * the store entry in feast core.
-   *
-   * @param store entry to register/update in Feast Core.
-   * @return The register/updated store entry
-   */
-  public Store registerStore(Store store) {
-    UpdateStoreRequest request = UpdateStoreRequest.newBuilder().setStore(store).build();
-    try {
-      UpdateStoreResponse updateStoreResponse = this.updateStore(request);
-      if (!updateStoreResponse.getStore().equals(store)) {
-        throw new RuntimeException("Core store config not matching current store config");
-      }
-      return updateStoreResponse.getStore();
-    } catch (Exception e) {
-      throw new RuntimeException("Unable to update store configuration", e);
-    }
   }
 
   public ListProjectsResponse listProjects(ListProjectsRequest listProjectsRequest) {
