@@ -43,7 +43,6 @@ public class KetoAuthorizationProvider implements AuthorizationProvider {
      * Initialized builder for Keto authorization provider.
      *
      * @param url Url string for Keto server.
-     * @return Returns Builder
      */
     public Builder(String url) {
       this.url = url;
