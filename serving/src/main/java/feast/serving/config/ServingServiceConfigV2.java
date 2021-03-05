@@ -18,7 +18,6 @@ package feast.serving.config;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.protobuf.InvalidProtocolBufferException;
-import feast.proto.core.StoreProto;
 import feast.serving.service.OnlineServingServiceV2;
 import feast.serving.service.ServingServiceV2;
 import feast.serving.specs.CachedSpecService;
@@ -39,26 +38,19 @@ public class ServingServiceConfigV2 {
       throws InvalidProtocolBufferException, JsonProcessingException {
     ServingServiceV2 servingService = null;
     FeastProperties.Store store = feastProperties.getActiveStore();
-    StoreProto.Store.StoreType storeType = store.toProto().getType();
 
-    switch (storeType) {
+    switch (store.getType()) {
       case REDIS_CLUSTER:
         RedisClientAdapter redisClusterClient =
-            RedisClusterClient.create(store.toProto().getRedisClusterConfig());
+            RedisClusterClient.create(store.getRedisClusterConfig());
         OnlineRetrieverV2 redisClusterRetriever = new OnlineRetriever(redisClusterClient);
         servingService = new OnlineServingServiceV2(redisClusterRetriever, specService, tracer);
         break;
       case REDIS:
-        RedisClientAdapter redisClient = RedisClient.create(store.toProto().getRedisConfig());
+        RedisClientAdapter redisClient = RedisClient.create(store.getRedisConfig());
         OnlineRetrieverV2 redisRetriever = new OnlineRetriever(redisClient);
         servingService = new OnlineServingServiceV2(redisRetriever, specService, tracer);
         break;
-      case UNRECOGNIZED:
-      case INVALID:
-        throw new IllegalArgumentException(
-            String.format(
-                "Unsupported store type '%s' for store name '%s'",
-                store.getType(), store.getName()));
     }
 
     return servingService;
