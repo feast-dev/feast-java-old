@@ -311,14 +311,14 @@ public class CoreServiceImpl extends CoreServiceImplBase {
           String.format(
               "ApplyFeatureTable: Unable to apply Feature Table due to a conflict: "
                   + "Ensure that name is unique within Project: (name: %s, project: %s)",
-              projectName, tableName));
+              tableName, projectName));
       responseObserver.onError(
           Status.ALREADY_EXISTS.withDescription(e.getMessage()).withCause(e).asRuntimeException());
     } catch (IllegalArgumentException e) {
       log.error(
           String.format(
               "ApplyFeatureTable: Invalid apply Feature Table Request: (name: %s, project: %s)",
-              projectName, tableName));
+              tableName, projectName));
       responseObserver.onError(
           Status.INVALID_ARGUMENT
               .withDescription(e.getMessage())
@@ -328,7 +328,7 @@ public class CoreServiceImpl extends CoreServiceImplBase {
       log.error(
           String.format(
               "ApplyFeatureTable: Unsupported apply Feature Table Request: (name: %s, project: %s)",
-              projectName, tableName));
+              tableName, projectName));
       responseObserver.onError(
           Status.UNIMPLEMENTED.withDescription(e.getMessage()).withCause(e).asRuntimeException());
     } catch (Exception e) {
