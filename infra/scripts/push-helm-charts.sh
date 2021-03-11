@@ -17,5 +17,5 @@ helm repo add feast-helm-chart-repo $bucket
 helm package infra/charts/feast-core
 helm package infra/charts/feast-serving
 
-helm gcs push --force feast-core-${1}.tgz feast-helm-chart-repo
-helm gcs push --force feast-serving-${1}.tgz feast-helm-chart-repo
+helm gcs push --public --force feast-core-${1}.tgz feast-helm-chart-repo
+helm gcs push --public --force feast-serving-${1}.tgz feast-helm-chart-repo
