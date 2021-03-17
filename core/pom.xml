@@ -297,7 +297,7 @@
         <dependency>
             <groupId>sh.ory.keto</groupId>
             <artifactId>keto-client</artifactId>
-            <version>0.4.4-alpha.1</version>
+            <version>0.5.7-alpha.1.pre.0</version>
         </dependency>
         <dependency>
             <groupId>com.github.tomakehurst</groupId>
