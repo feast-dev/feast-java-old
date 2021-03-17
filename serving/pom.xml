@@ -317,7 +317,6 @@
       <groupId>sh.ory.keto</groupId>
       <artifactId>keto-client</artifactId>
       <version>0.4.4-alpha.1</version>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>dev.feast</groupId>
