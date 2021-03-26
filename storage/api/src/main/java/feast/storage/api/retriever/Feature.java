@@ -16,33 +16,17 @@
  */
 package feast.storage.api.retriever;
 
-import com.google.auto.value.AutoValue;
 import com.google.protobuf.Timestamp;
 import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
+import feast.proto.types.ValueProto;
 import feast.proto.types.ValueProto.Value;
 
-@AutoValue
-public abstract class Feature {
+public interface Feature {
+  Value getFeatureValue(ValueProto.ValueType.Enum valueType);
 
-  public abstract FeatureReferenceV2 getFeatureReference();
+  FeatureReferenceV2 getFeatureReference();
 
-  public abstract Value getFeatureValue();
+  Timestamp getEventTimestamp();
 
-  public abstract Timestamp getEventTimestamp();
-
-  public static Builder builder() {
-    return new AutoValue_Feature.Builder();
-  }
-
-  @AutoValue.Builder
-  public abstract static class Builder {
-
-    public abstract Builder setFeatureReference(FeatureReferenceV2 featureReference);
-
-    public abstract Builder setFeatureValue(Value featureValue);
-
-    public abstract Builder setEventTimestamp(Timestamp eventTimestamp);
-
-    public abstract Feature build();
-  }
+  Boolean isSameFeatureSpec(ValueProto.ValueType.Enum anEnum);
 }

@@ -35,6 +35,7 @@ import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse.FieldValues
 import feast.proto.types.ValueProto;
 import feast.serving.specs.CachedSpecService;
 import feast.storage.api.retriever.Feature;
+import feast.storage.api.retriever.ProtoFeature;
 import feast.storage.connectors.redis.retriever.OnlineRetriever;
 import io.opentracing.Tracer;
 import io.opentracing.Tracer.SpanBuilder;
@@ -64,65 +65,53 @@ public class OnlineServingServiceTest {
 
     mockedFeatureRows = new ArrayList<>();
     mockedFeatureRows.add(
-        Feature.builder()
-            .setFeatureReference(
-                ServingAPIProto.FeatureReferenceV2.newBuilder()
-                    .setFeatureTable("featuretable_1")
-                    .setName("feature_1")
-                    .build())
-            .setFeatureValue(createStrValue("1"))
-            .setEventTimestamp(Timestamp.newBuilder().setSeconds(100).build())
-            .build());
+        new ProtoFeature(
+            ServingAPIProto.FeatureReferenceV2.newBuilder()
+                .setFeatureTable("featuretable_1")
+                .setName("feature_1")
+                .build(),
+            Timestamp.newBuilder().setSeconds(100).build(),
+            createStrValue("1")));
     mockedFeatureRows.add(
-        Feature.builder()
-            .setFeatureReference(
-                ServingAPIProto.FeatureReferenceV2.newBuilder()
-                    .setFeatureTable("featuretable_1")
-                    .setName("feature_2")
-                    .build())
-            .setFeatureValue(createStrValue("2"))
-            .setEventTimestamp(Timestamp.newBuilder().setSeconds(100).build())
-            .build());
+        new ProtoFeature(
+            ServingAPIProto.FeatureReferenceV2.newBuilder()
+                .setFeatureTable("featuretable_1")
+                .setName("feature_2")
+                .build(),
+            Timestamp.newBuilder().setSeconds(100).build(),
+            createStrValue("2")));
     mockedFeatureRows.add(
-        Feature.builder()
-            .setFeatureReference(
-                ServingAPIProto.FeatureReferenceV2.newBuilder()
-                    .setFeatureTable("featuretable_1")
-                    .setName("feature_1")
-                    .build())
-            .setFeatureValue(createStrValue("3"))
-            .setEventTimestamp(Timestamp.newBuilder().setSeconds(100).build())
-            .build());
+        new ProtoFeature(
+            ServingAPIProto.FeatureReferenceV2.newBuilder()
+                .setFeatureTable("featuretable_1")
+                .setName("feature_1")
+                .build(),
+            Timestamp.newBuilder().setSeconds(100).build(),
+            createStrValue("3")));
     mockedFeatureRows.add(
-        Feature.builder()
-            .setFeatureReference(
-                ServingAPIProto.FeatureReferenceV2.newBuilder()
-                    .setFeatureTable("featuretable_1")
-                    .setName("feature_2")
-                    .build())
-            .setFeatureValue(createStrValue("4"))
-            .setEventTimestamp(Timestamp.newBuilder().setSeconds(100).build())
-            .build());
+        new ProtoFeature(
+            ServingAPIProto.FeatureReferenceV2.newBuilder()
+                .setFeatureTable("featuretable_1")
+                .setName("feature_2")
+                .build(),
+            Timestamp.newBuilder().setSeconds(100).build(),
+            createStrValue("4")));
     mockedFeatureRows.add(
-        Feature.builder()
-            .setFeatureReference(
-                ServingAPIProto.FeatureReferenceV2.newBuilder()
-                    .setFeatureTable("featuretable_1")
-                    .setName("feature_3")
-                    .build())
-            .setFeatureValue(createStrValue("5"))
-            .setEventTimestamp(Timestamp.newBuilder().setSeconds(100).build())
-            .build());
+        new ProtoFeature(
+            ServingAPIProto.FeatureReferenceV2.newBuilder()
+                .setFeatureTable("featuretable_1")
+                .setName("feature_3")
+                .build(),
+            Timestamp.newBuilder().setSeconds(100).build(),
+            createStrValue("5")));
     mockedFeatureRows.add(
-        Feature.builder()
-            .setFeatureReference(
-                ServingAPIProto.FeatureReferenceV2.newBuilder()
-                    .setFeatureTable("featuretable_1")
-                    .setName("feature_1")
-                    .build())
-            .setFeatureValue(createStrValue("6"))
-            .setEventTimestamp(Timestamp.newBuilder().setSeconds(50).build())
-            .build());
+        new ProtoFeature(
+            ServingAPIProto.FeatureReferenceV2.newBuilder()
+                .setFeatureTable("featuretable_1")
+                .setName("feature_1")
+                .build(),
+            Timestamp.newBuilder().setSeconds(50).build(),
+            createStrValue("6")));
 
     featureSpecs = new ArrayList<>();
     featureSpecs.add(

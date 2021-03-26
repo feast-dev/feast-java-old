@@ -22,6 +22,7 @@ import com.google.protobuf.Timestamp;
 import feast.proto.serving.ServingAPIProto;
 import feast.proto.types.ValueProto;
 import feast.storage.api.retriever.Feature;
+import feast.storage.api.retriever.ProtoFeature;
 import io.lettuce.core.KeyValue;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -42,8 +43,7 @@ public class RedisHashDecoder {
       String timestampPrefix)
       throws InvalidProtocolBufferException {
     List<Feature> allFeatures = new ArrayList<>();
-    Map<ServingAPIProto.FeatureReferenceV2, Feature.Builder> allFeaturesBuilderMap =
-        new HashMap<>();
+    HashMap<ServingAPIProto.FeatureReferenceV2, ValueProto.Value> featureMap = new HashMap<>();
     Map<String, Timestamp> featureTableTimestampMap = new HashMap<>();
 
     for (KeyValue<byte[], byte[]> entity : redisHashValues) {
@@ -60,20 +60,19 @@ public class RedisHashDecoder {
               byteToFeatureReferenceMap.get(redisValueK.toString());
           ValueProto.Value featureValue = ValueProto.Value.parseFrom(redisValueV);
 
-          Feature.Builder featureBuilder =
-              Feature.builder().setFeatureReference(featureReference).setFeatureValue(featureValue);
-          allFeaturesBuilderMap.put(featureReference, featureBuilder);
+          featureMap.put(featureReference, featureValue);
         }
       }
     }
 
     // Add timestamp to features
-    for (Map.Entry<ServingAPIProto.FeatureReferenceV2, Feature.Builder> entry :
-        allFeaturesBuilderMap.entrySet()) {
+    for (Map.Entry<ServingAPIProto.FeatureReferenceV2, ValueProto.Value> entry :
+        featureMap.entrySet()) {
       String timestampRedisHashKeyStr = timestampPrefix + ":" + entry.getKey().getFeatureTable();
       Timestamp curFeatureTimestamp = featureTableTimestampMap.get(timestampRedisHashKeyStr);
 
-      Feature curFeature = entry.getValue().setEventTimestamp(curFeatureTimestamp).build();
+      ProtoFeature curFeature =
+          new ProtoFeature(entry.getKey(), curFeatureTimestamp, entry.getValue());
       allFeatures.add(curFeature);
     }
 
