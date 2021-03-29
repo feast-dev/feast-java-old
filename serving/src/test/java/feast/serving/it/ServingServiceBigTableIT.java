@@ -25,7 +25,6 @@ import com.google.api.gax.rpc.FixedTransportChannelProvider;
 import com.google.api.gax.rpc.TransportChannelProvider;
 import com.google.cloud.bigtable.admin.v2.BigtableTableAdminClient;
 import com.google.cloud.bigtable.admin.v2.models.CreateTableRequest;
-import com.google.cloud.bigtable.admin.v2.models.Table;
 import com.google.cloud.bigtable.admin.v2.stub.BigtableTableAdminStubSettings;
 import com.google.cloud.bigtable.admin.v2.stub.EnhancedBigtableTableAdminStub;
 import com.google.cloud.bigtable.data.v2.BigtableDataClient;
@@ -51,6 +50,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -88,7 +88,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
   static CoreSimpleAPIClient coreClient;
   static ServingServiceGrpc.ServingServiceBlockingStub servingStub;
 
-  static final int FEAST_SERVING_PORT = 6568;
+  static final int FEAST_SERVING_PORT = 6569;
 
   static final String PROJECT_ID = "test-project";
   static final String INSTANCE_ID = "test-instance";
@@ -124,6 +124,15 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
                 .setProjectId(PROJECT_ID)
                 .setInstanceId(INSTANCE_ID)
                 .build());
+
+    String endpoint =
+        environment.getServiceHost("bigtable_1", BIGTABLE_PORT)
+            + ":"
+            + environment.getServicePort("bigtable_1", BIGTABLE_PORT);
+    channel = ManagedChannelBuilder.forTarget(endpoint).usePlaintext().build();
+    TransportChannelProvider channelProvider =
+        FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel));
+    NoCredentialsProvider credentialsProvider = NoCredentialsProvider.create();
 
     String projectName = "default";
     // Apply Entity (driver_id)
@@ -187,6 +196,8 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     ImmutableList<String> columnFamilies = ImmutableList.of(featureTableName, metadataColumnFamily);
     String emptyQualifier = "";
 
+    createTable(channelProvider, credentialsProvider, btTableName, columnFamilies);
+
     Schema ftSchema =
         SchemaBuilder.record("DriverData")
             .namespace(featureTableName)
@@ -209,6 +220,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
             .build();
     byte[] avroSerializedFeatures = recordToAvro(record, ftSchema);
 
+    // Single Entity Key
     byte[] entityFeatureKey =
         String.valueOf(DataGenerator.createInt64Value(1).getInt64Val()).getBytes();
 
@@ -218,23 +230,11 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     entityFeatureOutputStream.write(avroSerializedFeatures);
     byte[] entityFeatureValue = entityFeatureOutputStream.toByteArray();
 
-    // SchemaKey
+    // Single Entity SchemaKey
     ByteArrayOutputStream concatOutputStream = new ByteArrayOutputStream();
     concatOutputStream.write("schema#".getBytes());
     concatOutputStream.write(schemaReference);
     byte[] schemaKey = concatOutputStream.toByteArray();
-
-    String endpoint =
-        environment.getServiceHost("bigtable_1", BIGTABLE_PORT)
-            + ":"
-            + environment.getServicePort("bigtable_1", BIGTABLE_PORT);
-    // ManagedChannel channel = ManagedChannelBuilder.forTarget(endpoint).usePlaintext().build();
-    channel = ManagedChannelBuilder.forTarget(endpoint).usePlaintext().build();
-    TransportChannelProvider channelProvider =
-        FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel));
-    NoCredentialsProvider credentialsProvider = NoCredentialsProvider.create();
-
-    createTable(channelProvider, credentialsProvider, btTableName, columnFamilies);
 
     // Update Entity-Feature Row
     client.mutateRow(
@@ -251,6 +251,93 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
                 metadataColumnFamily,
                 ByteString.copyFrom("avro".getBytes()),
                 ByteString.copyFrom(ftSchema.toString().getBytes())));
+
+    // Compound Entity Key
+    // Apply FeatureTable (rides_merchant)
+    String rideMerchantFeatureTableName = "rides_merchant";
+    ImmutableList<String> ridesMerchantEntities =
+        ImmutableList.of(driverEntityName, merchantEntityName);
+    ImmutableList<String> compoundColumnFamilies =
+        ImmutableList.of(rideMerchantFeatureTableName, metadataColumnFamily);
+
+    TestUtils.applyFeatureTable(
+        coreClient,
+        projectName,
+        rideMerchantFeatureTableName,
+        ridesMerchantEntities,
+        ridesFeatures,
+        7200);
+
+    String compoundBtTableName =
+        String.format(
+            "%s__%s",
+            projectName, ridesMerchantEntities.stream().collect(Collectors.joining("__")));
+    ValueProto.Value driverEntityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
+    ValueProto.Value merchantEntityValue = ValueProto.Value.newBuilder().setInt64Val(1234).build();
+    ImmutableMap<String, ValueProto.Value> compoundEntityMap =
+        ImmutableMap.of(
+            driverEntityName, driverEntityValue, merchantEntityName, merchantEntityValue);
+
+    createTable(channelProvider, credentialsProvider, compoundBtTableName, compoundColumnFamilies);
+
+    // Instantiate EntityRows
+    ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow entityRow =
+        DataGenerator.createCompoundEntityRow(compoundEntityMap, 100);
+    byte[] compoundEntityFeatureKey =
+        ridesMerchantEntities.stream()
+            .map(entity -> DataGenerator.valueToString(entityRow.getFieldsMap().get(entity)))
+            .collect(Collectors.joining("#"))
+            .getBytes();
+
+    Schema compoundFtSchema =
+        SchemaBuilder.record("DriverMerchantData")
+            .namespace(rideMerchantFeatureTableName)
+            .fields()
+            .requiredInt(feature1Reference.getName())
+            .requiredDouble(feature2Reference.getName())
+            .nullableString(feature3Reference.getName(), "null")
+            .requiredString(feature4Reference.getName())
+            .endRecord();
+    byte[] compoundSchemaReference =
+        Hashing.murmur3_32().hashBytes(compoundFtSchema.toString().getBytes()).asBytes();
+
+    // Entity-Feature Row
+    GenericRecord compoundEntityRecord =
+        new GenericRecordBuilder(ftSchema)
+            .set("trip_cost", 10)
+            .set("trip_distance", 5.5)
+            .set("trip_empty", null)
+            .set("trip_wrong_type", "wrong_type")
+            .build();
+    byte[] compoundAvroSerializedFeatures = recordToAvro(compoundEntityRecord, compoundFtSchema);
+
+    // Compound Entity SchemaKey
+    ByteArrayOutputStream compoundEntityFeatureOutputStream = new ByteArrayOutputStream();
+    compoundEntityFeatureOutputStream.write(schemaReference);
+    compoundEntityFeatureOutputStream.write("".getBytes());
+    compoundEntityFeatureOutputStream.write(compoundAvroSerializedFeatures);
+    byte[] compoundEntityFeatureValue = compoundEntityFeatureOutputStream.toByteArray();
+
+    ByteArrayOutputStream compoundConcatOutputStream = new ByteArrayOutputStream();
+    compoundConcatOutputStream.write("schema#".getBytes());
+    compoundConcatOutputStream.write(compoundSchemaReference);
+    byte[] compoundSchemaKey = concatOutputStream.toByteArray();
+
+    // Update Compound Entity-Feature Row
+    client.mutateRow(
+        RowMutation.create(compoundBtTableName, ByteString.copyFrom(compoundEntityFeatureKey))
+            .setCell(
+                rideMerchantFeatureTableName,
+                ByteString.copyFrom(emptyQualifier.getBytes()),
+                ByteString.copyFrom(compoundEntityFeatureValue)));
+
+    // Update Schema Row
+    client.mutateRow(
+        RowMutation.create(compoundBtTableName, ByteString.copyFrom(compoundSchemaKey))
+            .setCell(
+                metadataColumnFamily,
+                ByteString.copyFrom("avro".getBytes()),
+                ByteString.copyFrom(compoundFtSchema.toString().getBytes())));
 
     // set up options for call credentials
     options.put("oauth_url", TOKEN_URL);
@@ -286,7 +373,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
       for (String columnFamily : columnFamilies) {
         createTableRequest.addFamily(columnFamily);
       }
-      Table table = client.createTable(createTableRequest);
+      client.createTable(createTableRequest);
     }
   }
 
@@ -340,6 +427,72 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     ImmutableMap<String, ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
         ImmutableMap.of(
             entityName,
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(featureReference),
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
+
+    ServingAPIProto.GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
+        ServingAPIProto.GetOnlineFeaturesResponse.FieldValues.newBuilder()
+            .putAllFields(expectedValueMap)
+            .putAllStatuses(expectedStatusMap)
+            .build();
+    ImmutableList<ServingAPIProto.GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
+        ImmutableList.of(expectedFieldValues);
+
+    assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
+  }
+
+  @Test
+  public void shouldRegisterCompoundEntityAndGetOnlineFeatures() {
+    String projectName = "default";
+    String driverEntityName = "driver_id";
+    String merchantEntityName = "merchant_id";
+    ValueProto.Value driverEntityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
+    ValueProto.Value merchantEntityValue = ValueProto.Value.newBuilder().setInt64Val(1234).build();
+
+    ImmutableMap<String, ValueProto.Value> compoundEntityMap =
+        ImmutableMap.of(
+            driverEntityName, driverEntityValue, merchantEntityName, merchantEntityValue);
+
+    // Instantiate EntityRows
+    ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow entityRow =
+        DataGenerator.createCompoundEntityRow(compoundEntityMap, 100);
+    ImmutableList<ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow> entityRows =
+        ImmutableList.of(entityRow);
+
+    // Instantiate FeatureReferences
+    ServingAPIProto.FeatureReferenceV2 featureReference =
+        DataGenerator.createFeatureReference("rides", "trip_cost");
+    ServingAPIProto.FeatureReferenceV2 notFoundFeatureReference =
+        DataGenerator.createFeatureReference("rides", "trip_transaction");
+
+    ImmutableList<ServingAPIProto.FeatureReferenceV2> featureReferences =
+        ImmutableList.of(featureReference, notFoundFeatureReference);
+
+    // Build GetOnlineFeaturesRequestV2
+    ServingAPIProto.GetOnlineFeaturesRequestV2 onlineFeatureRequest =
+        TestUtils.createOnlineFeatureRequest(projectName, featureReferences, entityRows);
+    ServingAPIProto.GetOnlineFeaturesResponse featureResponse =
+        servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
+
+    ImmutableMap<String, ValueProto.Value> expectedValueMap =
+        ImmutableMap.of(
+            driverEntityName,
+            driverEntityValue,
+            merchantEntityName,
+            merchantEntityValue,
+            FeatureV2.getFeatureStringRef(featureReference),
+            DataGenerator.createInt64Value(5),
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            DataGenerator.createEmptyValue());
+
+    ImmutableMap<String, ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
+        ImmutableMap.of(
+            driverEntityName,
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            merchantEntityName,
             ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
             FeatureV2.getFeatureStringRef(featureReference),
             ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
