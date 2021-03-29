@@ -32,6 +32,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 
 @Configuration
 public class ServingServiceConfigV2 {
@@ -40,6 +41,7 @@ public class ServingServiceConfigV2 {
   @Autowired private ApplicationContext context;
 
   @Bean
+  @Lazy(true)
   public BigtableDataClient bigtableClient(FeastProperties feastProperties) throws IOException {
     BigTableStoreConfig config = feastProperties.getActiveStore().getBigtableConfig();
     String projectId = config.getProjectId();

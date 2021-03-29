@@ -89,10 +89,9 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
                             entry ->
                                 Pair.of(
                                     entry.getKey(),
-                                    // TODO: Is there a better default value to set
                                     getMetadata(
-                                        ValueProto.Value.newBuilder().build(),
-                                        true,
+                                        entry.getValue(),
+                                        false,
                                         false)))
                         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight)))
             .collect(Collectors.toList());
