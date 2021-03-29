@@ -152,7 +152,7 @@ public class OnlineServingServiceTest {
 
     List<List<Feature>> featureRows = List.of(entityKeyList1, entityKeyList2);
 
-    when(retrieverV2.getOnlineFeatures(any(), any(), any())).thenReturn(featureRows);
+    when(retrieverV2.getOnlineFeatures(any(), any(), any(), any())).thenReturn(featureRows);
     when(specService.getFeatureTableSpec(any(), any())).thenReturn(getFeatureTableSpec());
     when(specService.getFeatureSpec(projectName, mockedFeatureRows.get(0).getFeatureReference()))
         .thenReturn(featureSpecs.get(0));
@@ -219,7 +219,7 @@ public class OnlineServingServiceTest {
 
     List<List<Feature>> featureRows = List.of(entityKeyList1, entityKeyList2);
 
-    when(retrieverV2.getOnlineFeatures(any(), any(), any())).thenReturn(featureRows);
+    when(retrieverV2.getOnlineFeatures(any(), any(), any(), any())).thenReturn(featureRows);
     when(specService.getFeatureTableSpec(any(), any())).thenReturn(getFeatureTableSpec());
     when(specService.getFeatureSpec(projectName, mockedFeatureRows.get(0).getFeatureReference()))
         .thenReturn(featureSpecs.get(0));
@@ -283,7 +283,7 @@ public class OnlineServingServiceTest {
 
     List<List<Feature>> featureRows = List.of(entityKeyList1, entityKeyList2);
 
-    when(retrieverV2.getOnlineFeatures(any(), any(), any())).thenReturn(featureRows);
+    when(retrieverV2.getOnlineFeatures(any(), any(), any(), any())).thenReturn(featureRows);
     when(specService.getFeatureTableSpec(any(), any()))
         .thenReturn(
             FeatureTableSpec.newBuilder()

@@ -30,8 +30,6 @@ import feast.storage.api.retriever.Feature;
 import feast.storage.api.retriever.NativeFeature;
 import feast.storage.api.retriever.OnlineRetrieverV2;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -52,9 +50,7 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
     this.schemaRegistry = new BigTableSchemaRegistry(client);
   }
 
-  private String getTableName(String project, EntityRow entityRow) {
-    List<String> entityNames = new ArrayList<>(new HashSet<>(entityRow.getFieldsMap().keySet()));
-
+  private String getTableName(String project, List<String> entityNames) {
     String tableName =
         String.format("%s__%s", project, entityNames.stream().collect(Collectors.joining("__")));
 
@@ -83,12 +79,7 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
     return stringRepr;
   }
 
-  private ByteString convertEntityValueToBigTableKey(EntityRow entityRow) {
-    List<String> entityNames = new ArrayList<>(new HashSet<>(entityRow.getFieldsMap().keySet()));
-
-    // Sort entity names by alphabetical order
-    entityNames.sort(String::compareTo);
-
+  private ByteString convertEntityValueToBigTableKey(EntityRow entityRow, List<String> entityNames) {
     return ByteString.copyFrom(
         entityNames.stream()
             .map(entity -> entityRow.getFieldsMap().get(entity))
@@ -124,16 +115,17 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
     return featureReferences.stream()
         .map(
             featureReference -> {
+              Object featureValue;
               try {
-                Object featureValue = record.get(featureReference.getName());
-                if (featureValue != null) {
-                  return new NativeFeature(
-                      featureReference,
-                      Timestamp.newBuilder().setSeconds(timestamp / 1000).build(),
-                      featureValue);
-                }
+                featureValue = record.get(featureReference.getName());
               } catch (AvroRuntimeException e) {
                 return null;
+              }
+              if (featureValue != null) {
+                return new NativeFeature(
+                    featureReference,
+                    Timestamp.newBuilder().setSeconds(timestamp / 1000).build(),
+                    featureValue);
               }
               return null;
             })
@@ -143,12 +135,15 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
 
   @Override
   public List<List<Feature>> getOnlineFeatures(
-      String project, List<EntityRow> entityRows, List<FeatureReferenceV2> featureReferences) {
+      String project,
+      List<EntityRow> entityRows,
+      List<FeatureReferenceV2> featureReferences,
+      List<String> entityNames) {
     List<String> columnFamilies = getColumnFamilies(featureReferences);
-    String tableName = getTableName(project, entityRows.get(0));
+    String tableName = getTableName(project, entityNames);
 
     ServerStream<Row> rowsFromBigTable =
-        getFeaturesFromBigTable(tableName, entityRows, columnFamilies);
+        getFeaturesFromBigTable(tableName, entityRows, columnFamilies, entityNames);
     List<List<Feature>> features =
         convertRowToFeature(tableName, rowsFromBigTable, featureReferences);
 
@@ -156,14 +151,14 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
   }
 
   private ServerStream<Row> getFeaturesFromBigTable(
-      String tableName, List<EntityRow> entityRows, List<String> columnFamilies) {
+      String tableName, List<EntityRow> entityRows, List<String> columnFamilies, List<String> entityNames) {
 
     Query rowQuery = Query.create(tableName);
     Filters.InterleaveFilter familyFilter = Filters.FILTERS.interleave();
     columnFamilies.forEach(cf -> familyFilter.filter(Filters.FILTERS.family().exactMatch(cf)));
 
     for (EntityRow row : entityRows) {
-      ByteString rowKey = convertEntityValueToBigTableKey(row);
+      ByteString rowKey = convertEntityValueToBigTableKey(row, entityNames);
       rowQuery = rowQuery.rowKey(rowKey);
     }
 

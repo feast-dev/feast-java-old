@@ -19,7 +19,9 @@ package feast.serving.service;
 import static feast.common.models.FeatureTable.getFeatureTableStringRef;
 
 import com.google.protobuf.Duration;
+import com.google.protobuf.ProtocolStringList;
 import feast.common.models.FeatureV2;
+import feast.proto.core.FeatureTableProto;
 import feast.proto.serving.ServingAPIProto.FeastServingType;
 import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
 import feast.proto.serving.ServingAPIProto.GetFeastServingInfoRequest;
@@ -89,30 +91,11 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
                                     entry.getKey(),
                                     // TODO: Is there a better default value to set
                                     getMetadata(
-                                        ValueProto.Value.newBuilder().setStringVal("").build(),
-                                        false,
+                                        ValueProto.Value.newBuilder().build(),
+                                        true,
                                         false)))
                         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight)))
             .collect(Collectors.toList());
-
-    Span storageRetrievalSpan = tracer.buildSpan("storageRetrieval").start();
-    if (storageRetrievalSpan != null) {
-      storageRetrievalSpan.setTag("entities", entityRows.size());
-      storageRetrievalSpan.setTag("features", featureReferences.size());
-    }
-    List<List<Feature>> entityRowsFeatures =
-        retriever.getOnlineFeatures(projectName, entityRows, featureReferences);
-    if (storageRetrievalSpan != null) {
-      storageRetrievalSpan.finish();
-    }
-
-    if (entityRowsFeatures.size() != entityRows.size()) {
-      throw Status.INTERNAL
-          .withDescription(
-              "The no. of FeatureRow obtained from OnlineRetriever"
-                  + "does not match no. of entityRow passed.")
-          .asRuntimeException();
-    }
 
     String finalProjectName = projectName;
     Map<FeatureReferenceV2, Duration> featureMaxAges =
@@ -122,6 +105,9 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
                 Collectors.toMap(
                     Function.identity(),
                     ref -> specService.getFeatureTableSpec(finalProjectName, ref).getMaxAge()));
+    List<String> entityNames = featureReferences.stream().map(
+        ref -> specService.getFeatureTableSpec(finalProjectName, ref).getEntitiesList()
+    ).findFirst().get();
 
     Map<FeatureReferenceV2, ValueProto.ValueType.Enum> featureValueTypes =
         featureReferences.stream()
@@ -136,6 +122,25 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
                         return ValueProto.ValueType.Enum.INVALID;
                       }
                     }));
+
+    Span storageRetrievalSpan = tracer.buildSpan("storageRetrieval").start();
+    if (storageRetrievalSpan != null) {
+      storageRetrievalSpan.setTag("entities", entityRows.size());
+      storageRetrievalSpan.setTag("features", featureReferences.size());
+    }
+    List<List<Feature>> entityRowsFeatures =
+        retriever.getOnlineFeatures(projectName, entityRows, featureReferences, entityNames);
+    if (storageRetrievalSpan != null) {
+      storageRetrievalSpan.finish();
+    }
+
+    if (entityRowsFeatures.size() != entityRows.size()) {
+      throw Status.INTERNAL
+          .withDescription(
+              "The no. of FeatureRow obtained from OnlineRetriever"
+                  + "does not match no. of entityRow passed.")
+          .asRuntimeException();
+    }
 
     Span postProcessingSpan = tracer.buildSpan("postProcessing").start();
 

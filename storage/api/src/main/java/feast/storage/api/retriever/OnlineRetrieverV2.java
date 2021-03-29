@@ -39,5 +39,6 @@ public interface OnlineRetrieverV2 {
   List<List<Feature>> getOnlineFeatures(
       String project,
       List<ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow> entityRows,
-      List<ServingAPIProto.FeatureReferenceV2> featureReferences);
+      List<ServingAPIProto.FeatureReferenceV2> featureReferences,
+      List<String> entityNames);
 }

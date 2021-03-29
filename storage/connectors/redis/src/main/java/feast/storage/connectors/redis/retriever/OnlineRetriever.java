@@ -44,7 +44,8 @@ public class OnlineRetriever implements OnlineRetrieverV2 {
   public List<List<Feature>> getOnlineFeatures(
       String project,
       List<ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow> entityRows,
-      List<ServingAPIProto.FeatureReferenceV2> featureReferences) {
+      List<ServingAPIProto.FeatureReferenceV2> featureReferences,
+      List<String> entityNames) {
 
     List<RedisProto.RedisKeyV2> redisKeys = RedisKeyGenerator.buildRedisKeys(project, entityRows);
     List<List<Feature>> features = getFeaturesFromRedis(redisKeys, featureReferences);
