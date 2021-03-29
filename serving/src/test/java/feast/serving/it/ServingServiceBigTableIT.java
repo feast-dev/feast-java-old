@@ -34,12 +34,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.hash.Hashing;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.Timestamp;
 import feast.common.it.DataGenerator;
 import feast.common.models.FeatureV2;
 import feast.proto.core.EntityProto;
-import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
-import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
-import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
+import feast.proto.serving.ServingAPIProto;
 import feast.proto.serving.ServingServiceGrpc;
 import feast.proto.types.ValueProto;
 import io.grpc.ManagedChannel;
@@ -85,24 +84,15 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 public class ServingServiceBigTableIT extends BaseAuthIT {
 
   static final Map<String, String> options = new HashMap<>();
+  static final String timestampPrefix = "_ts";
   static CoreSimpleAPIClient coreClient;
   static ServingServiceGrpc.ServingServiceBlockingStub servingStub;
 
-  static BigtableDataClient client;
-  static final int FEAST_SERVING_PORT = 6569;
+  static final int FEAST_SERVING_PORT = 6568;
 
   static final String PROJECT_ID = "test-project";
   static final String INSTANCE_ID = "test-instance";
   static ManagedChannel channel;
-
-  static final FeatureReferenceV2 feature1Reference =
-      DataGenerator.createFeatureReference("rides", "trip_cost");
-  static final FeatureReferenceV2 feature2Reference =
-      DataGenerator.createFeatureReference("rides", "trip_distance");
-  static final FeatureReferenceV2 feature3Reference =
-      DataGenerator.createFeatureReference("rides", "trip_empty");
-  static final FeatureReferenceV2 feature4Reference =
-      DataGenerator.createFeatureReference("rides", "trip_wrong_type");
 
   @ClassRule @Container
   public static DockerComposeContainer environment =
@@ -123,11 +113,10 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
   @BeforeAll
   static void globalSetup() throws IOException {
     coreClient = TestUtils.getApiClientForCore(FEAST_CORE_PORT);
-
     servingStub = TestUtils.getServingServiceStub(false, FEAST_SERVING_PORT, null);
 
     // Initialize BigTable Client
-    client =
+    BigtableDataClient client =
         BigtableDataClient.create(
             BigtableDataSettings.newBuilderForEmulator(
                     environment.getServiceHost("bigtable_1", BIGTABLE_PORT),
@@ -145,7 +134,6 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
         FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel));
     NoCredentialsProvider credentialsProvider = NoCredentialsProvider.create();
 
-    /** Feast resource creation Workflow */
     String projectName = "default";
     // Apply Entity (driver_id)
     String driverEntityName = "driver_id";
@@ -188,36 +176,28 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     TestUtils.applyFeatureTable(
         coreClient, projectName, ridesFeatureTableName, ridesEntities, ridesFeatures, 7200);
 
-    // Apply FeatureTable (rides_merchant)
-    String rideMerchantFeatureTableName = "rides_merchant";
-    ImmutableList<String> ridesMerchantEntities =
-        ImmutableList.of(driverEntityName, merchantEntityName);
+    // Serving
+    ServingAPIProto.FeatureReferenceV2 feature1Reference =
+        DataGenerator.createFeatureReference("rides", "trip_cost");
+    ServingAPIProto.FeatureReferenceV2 feature2Reference =
+        DataGenerator.createFeatureReference("rides", "trip_distance");
+    ServingAPIProto.FeatureReferenceV2 feature3Reference =
+        DataGenerator.createFeatureReference("rides", "trip_empty");
+    ServingAPIProto.FeatureReferenceV2 feature4Reference =
+        DataGenerator.createFeatureReference("rides", "trip_wrong_type");
 
-    TestUtils.applyFeatureTable(
-        coreClient,
-        projectName,
-        rideMerchantFeatureTableName,
-        ridesMerchantEntities,
-        ridesFeatures,
-        7200);
+    // Event Timestamp
+    String eventTimestampKey = timestampPrefix + ":" + ridesFeatureTableName;
+    Timestamp eventTimestampValue = Timestamp.newBuilder().setSeconds(100).build();
 
-    // BigTable Table names
     String btTableName = String.format("%s__%s", projectName, driverEntityName);
-    String compoundBtTableName =
-        String.format(
-            "%s__%s",
-            projectName, ridesMerchantEntities.stream().collect(Collectors.joining("__")));
-
     String featureTableName = "rides";
     String metadataColumnFamily = "metadata";
     ImmutableList<String> columnFamilies = ImmutableList.of(featureTableName, metadataColumnFamily);
-    ImmutableList<String> compoundColumnFamilies =
-        ImmutableList.of(rideMerchantFeatureTableName, metadataColumnFamily);
+    String emptyQualifier = "";
 
     createTable(channelProvider, credentialsProvider, btTableName, columnFamilies);
-    createTable(channelProvider, credentialsProvider, compoundBtTableName, compoundColumnFamilies);
 
-    /** Single Entity Ingestion Workflow */
     Schema ftSchema =
         SchemaBuilder.record("DriverData")
             .namespace(featureTableName)
@@ -230,6 +210,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     byte[] schemaReference =
         Hashing.murmur3_32().hashBytes(ftSchema.toString().getBytes()).asBytes();
 
+    // Entity-Feature Row
     GenericRecord record =
         new GenericRecordBuilder(ftSchema)
             .set("trip_cost", 5)
@@ -237,15 +218,77 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
             .set("trip_empty", null)
             .set("trip_wrong_type", "test")
             .build();
+    byte[] avroSerializedFeatures = recordToAvro(record, ftSchema);
 
+    // Single Entity Key
     byte[] entityFeatureKey =
         String.valueOf(DataGenerator.createInt64Value(1).getInt64Val()).getBytes();
-    byte[] entityFeatureValue = createEntityValue(ftSchema, schemaReference, record);
-    byte[] schemaKey = createSchemaKey(schemaReference);
-    ingestData(
-        featureTableName, btTableName, entityFeatureKey, entityFeatureValue, schemaKey, ftSchema);
 
-    /** Compound Entity Ingestion Workflow */
+    ByteArrayOutputStream entityFeatureOutputStream = new ByteArrayOutputStream();
+    entityFeatureOutputStream.write(schemaReference);
+    entityFeatureOutputStream.write("".getBytes());
+    entityFeatureOutputStream.write(avroSerializedFeatures);
+    byte[] entityFeatureValue = entityFeatureOutputStream.toByteArray();
+
+    // Single Entity SchemaKey
+    ByteArrayOutputStream concatOutputStream = new ByteArrayOutputStream();
+    concatOutputStream.write("schema#".getBytes());
+    concatOutputStream.write(schemaReference);
+    byte[] schemaKey = concatOutputStream.toByteArray();
+
+    // Update Entity-Feature Row
+    client.mutateRow(
+        RowMutation.create(btTableName, ByteString.copyFrom(entityFeatureKey))
+            .setCell(
+                featureTableName,
+                ByteString.copyFrom(emptyQualifier.getBytes()),
+                ByteString.copyFrom(entityFeatureValue)));
+
+    // Update Schema Row
+    client.mutateRow(
+        RowMutation.create(btTableName, ByteString.copyFrom(schemaKey))
+            .setCell(
+                metadataColumnFamily,
+                ByteString.copyFrom("avro".getBytes()),
+                ByteString.copyFrom(ftSchema.toString().getBytes())));
+
+    // Compound Entity Key
+    // Apply FeatureTable (rides_merchant)
+    String rideMerchantFeatureTableName = "rides_merchant";
+    ImmutableList<String> ridesMerchantEntities =
+        ImmutableList.of(driverEntityName, merchantEntityName);
+    ImmutableList<String> compoundColumnFamilies =
+        ImmutableList.of(rideMerchantFeatureTableName, metadataColumnFamily);
+
+    TestUtils.applyFeatureTable(
+        coreClient,
+        projectName,
+        rideMerchantFeatureTableName,
+        ridesMerchantEntities,
+        ridesFeatures,
+        7200);
+
+    String compoundBtTableName =
+        String.format(
+            "%s__%s",
+            projectName, ridesMerchantEntities.stream().collect(Collectors.joining("__")));
+    ValueProto.Value driverEntityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
+    ValueProto.Value merchantEntityValue = ValueProto.Value.newBuilder().setInt64Val(1234).build();
+    ImmutableMap<String, ValueProto.Value> compoundEntityMap =
+        ImmutableMap.of(
+            driverEntityName, driverEntityValue, merchantEntityName, merchantEntityValue);
+
+    createTable(channelProvider, credentialsProvider, compoundBtTableName, compoundColumnFamilies);
+
+    // Instantiate EntityRows
+    ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow entityRow =
+        DataGenerator.createCompoundEntityRow(compoundEntityMap, 100);
+    byte[] compoundEntityFeatureKey =
+        ridesMerchantEntities.stream()
+            .map(entity -> DataGenerator.valueToString(entityRow.getFieldsMap().get(entity)))
+            .collect(Collectors.joining("#"))
+            .getBytes();
+
     Schema compoundFtSchema =
         SchemaBuilder.record("DriverMerchantData")
             .namespace(rideMerchantFeatureTableName)
@@ -258,36 +301,43 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     byte[] compoundSchemaReference =
         Hashing.murmur3_32().hashBytes(compoundFtSchema.toString().getBytes()).asBytes();
 
+    // Entity-Feature Row
     GenericRecord compoundEntityRecord =
-        new GenericRecordBuilder(compoundFtSchema)
+        new GenericRecordBuilder(ftSchema)
             .set("trip_cost", 10)
             .set("trip_distance", 5.5)
             .set("trip_empty", null)
             .set("trip_wrong_type", "wrong_type")
             .build();
+    byte[] compoundAvroSerializedFeatures = recordToAvro(compoundEntityRecord, compoundFtSchema);
 
-    ValueProto.Value driverEntityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
-    ValueProto.Value merchantEntityValue = ValueProto.Value.newBuilder().setInt64Val(1234).build();
-    ImmutableMap<String, ValueProto.Value> compoundEntityMap =
-        ImmutableMap.of(
-            driverEntityName, driverEntityValue, merchantEntityName, merchantEntityValue);
-    GetOnlineFeaturesRequestV2.EntityRow entityRow =
-        DataGenerator.createCompoundEntityRow(compoundEntityMap, 100);
-    byte[] compoundEntityFeatureKey =
-        ridesMerchantEntities.stream()
-            .map(entity -> DataGenerator.valueToString(entityRow.getFieldsMap().get(entity)))
-            .collect(Collectors.joining("#"))
-            .getBytes();
-    byte[] compoundEntityFeatureValue =
-        createEntityValue(compoundFtSchema, compoundSchemaReference, compoundEntityRecord);
-    byte[] compoundSchemaKey = createSchemaKey(compoundSchemaReference);
-    ingestData(
-        rideMerchantFeatureTableName,
-        compoundBtTableName,
-        compoundEntityFeatureKey,
-        compoundEntityFeatureValue,
-        compoundSchemaKey,
-        compoundFtSchema);
+    // Compound Entity SchemaKey
+    ByteArrayOutputStream compoundEntityFeatureOutputStream = new ByteArrayOutputStream();
+    compoundEntityFeatureOutputStream.write(schemaReference);
+    compoundEntityFeatureOutputStream.write("".getBytes());
+    compoundEntityFeatureOutputStream.write(compoundAvroSerializedFeatures);
+    byte[] compoundEntityFeatureValue = compoundEntityFeatureOutputStream.toByteArray();
+
+    ByteArrayOutputStream compoundConcatOutputStream = new ByteArrayOutputStream();
+    compoundConcatOutputStream.write("schema#".getBytes());
+    compoundConcatOutputStream.write(compoundSchemaReference);
+    byte[] compoundSchemaKey = concatOutputStream.toByteArray();
+
+    // Update Compound Entity-Feature Row
+    client.mutateRow(
+        RowMutation.create(compoundBtTableName, ByteString.copyFrom(compoundEntityFeatureKey))
+            .setCell(
+                rideMerchantFeatureTableName,
+                ByteString.copyFrom(emptyQualifier.getBytes()),
+                ByteString.copyFrom(compoundEntityFeatureValue)));
+
+    // Update Schema Row
+    client.mutateRow(
+        RowMutation.create(compoundBtTableName, ByteString.copyFrom(compoundSchemaKey))
+            .setCell(
+                metadataColumnFamily,
+                ByteString.copyFrom("avro".getBytes()),
+                ByteString.copyFrom(compoundFtSchema.toString().getBytes())));
 
     // set up options for call credentials
     options.put("oauth_url", TOKEN_URL);
@@ -327,59 +377,6 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     }
   }
 
-  private static byte[] createSchemaKey(byte[] schemaReference) throws IOException {
-    String schemaKeyPrefix = "schema#";
-
-    ByteArrayOutputStream concatOutputStream = new ByteArrayOutputStream();
-    concatOutputStream.write(schemaKeyPrefix.getBytes());
-    concatOutputStream.write(schemaReference);
-    byte[] schemaKey = concatOutputStream.toByteArray();
-
-    return schemaKey;
-  }
-
-  private static byte[] createEntityValue(
-      Schema schema, byte[] schemaReference, GenericRecord record) throws IOException {
-    // Entity-Feature Row
-    byte[] avroSerializedFeatures = recordToAvro(record, schema);
-
-    ByteArrayOutputStream concatOutputStream = new ByteArrayOutputStream();
-    concatOutputStream.write(schemaReference);
-    concatOutputStream.write("".getBytes());
-    concatOutputStream.write(avroSerializedFeatures);
-    byte[] entityFeatureValue = concatOutputStream.toByteArray();
-
-    return entityFeatureValue;
-  }
-
-  private static void ingestData(
-      String featureTableName,
-      String btTableName,
-      byte[] btEntityFeatureKey,
-      byte[] btEntityFeatureValue,
-      byte[] btSchemaKey,
-      Schema btSchema) {
-    String emptyQualifier = "";
-    String avroQualifier = "avro";
-    String metadataColumnFamily = "metadata";
-
-    // Update Compound Entity-Feature Row
-    client.mutateRow(
-        RowMutation.create(btTableName, ByteString.copyFrom(btEntityFeatureKey))
-            .setCell(
-                featureTableName,
-                ByteString.copyFrom(emptyQualifier.getBytes()),
-                ByteString.copyFrom(btEntityFeatureValue)));
-
-    // Update Schema Row
-    client.mutateRow(
-        RowMutation.create(btTableName, ByteString.copyFrom(btSchemaKey))
-            .setCell(
-                metadataColumnFamily,
-                ByteString.copyFrom(avroQualifier.getBytes()),
-                ByteString.copyFrom(btSchema.toString().getBytes())));
-  }
-
   private static byte[] recordToAvro(GenericRecord datum, Schema schema) throws IOException {
     GenericDatumWriter<Object> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -391,32 +388,31 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
   }
 
   @Test
-  public void shouldGetOnlineFeaturesForSingleEntity() {
+  public void shouldRegisterAndGetOnlineFeaturesWithNotFound() {
     // getOnlineFeatures Information
     String projectName = "default";
     String entityName = "driver_id";
     ValueProto.Value entityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
 
     // Instantiate EntityRows
-    GetOnlineFeaturesRequestV2.EntityRow entityRow1 =
+    ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow entityRow1 =
         DataGenerator.createEntityRow(entityName, DataGenerator.createInt64Value(1), 100);
-    ImmutableList<GetOnlineFeaturesRequestV2.EntityRow> entityRows = ImmutableList.of(entityRow1);
+    ImmutableList<ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow> entityRows =
+        ImmutableList.of(entityRow1);
 
     // Instantiate FeatureReferences
-    FeatureReferenceV2 featureReference =
+    ServingAPIProto.FeatureReferenceV2 featureReference =
         DataGenerator.createFeatureReference("rides", "trip_cost");
-    FeatureReferenceV2 notFoundFeatureReference =
+    ServingAPIProto.FeatureReferenceV2 notFoundFeatureReference =
         DataGenerator.createFeatureReference("rides", "trip_transaction");
-    FeatureReferenceV2 emptyFeatureReference =
-        DataGenerator.createFeatureReference("rides", "trip_empty");
 
-    ImmutableList<FeatureReferenceV2> featureReferences =
-        ImmutableList.of(featureReference, notFoundFeatureReference, emptyFeatureReference);
+    ImmutableList<ServingAPIProto.FeatureReferenceV2> featureReferences =
+        ImmutableList.of(featureReference, notFoundFeatureReference);
 
     // Build GetOnlineFeaturesRequestV2
-    GetOnlineFeaturesRequestV2 onlineFeatureRequest =
+    ServingAPIProto.GetOnlineFeaturesRequestV2 onlineFeatureRequest =
         TestUtils.createOnlineFeatureRequest(projectName, featureReferences, entityRows);
-    GetOnlineFeaturesResponse featureResponse =
+    ServingAPIProto.GetOnlineFeaturesResponse featureResponse =
         servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
 
     ImmutableMap<String, ValueProto.Value> expectedValueMap =
@@ -426,34 +422,30 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
             FeatureV2.getFeatureStringRef(featureReference),
             DataGenerator.createInt64Value(5),
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
-            DataGenerator.createEmptyValue(),
-            FeatureV2.getFeatureStringRef(emptyFeatureReference),
             DataGenerator.createEmptyValue());
 
-    ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
+    ImmutableMap<String, ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
         ImmutableMap.of(
             entityName,
-            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
             FeatureV2.getFeatureStringRef(featureReference),
-            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
-            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
-            FeatureV2.getFeatureStringRef(emptyFeatureReference),
-            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
 
-    GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
-        GetOnlineFeaturesResponse.FieldValues.newBuilder()
+    ServingAPIProto.GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
+        ServingAPIProto.GetOnlineFeaturesResponse.FieldValues.newBuilder()
             .putAllFields(expectedValueMap)
             .putAllStatuses(expectedStatusMap)
             .build();
-    ImmutableList<GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
+    ImmutableList<ServingAPIProto.GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
         ImmutableList.of(expectedFieldValues);
 
     assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
   }
 
   @Test
-  public void shouldGetOnlineFeaturesForCompoundEntity() {
+  public void shouldRegisterCompoundEntityAndGetOnlineFeatures() {
     String projectName = "default";
     String driverEntityName = "driver_id";
     String merchantEntityName = "merchant_id";
@@ -465,23 +457,24 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
             driverEntityName, driverEntityValue, merchantEntityName, merchantEntityValue);
 
     // Instantiate EntityRows
-    GetOnlineFeaturesRequestV2.EntityRow entityRow =
+    ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow entityRow =
         DataGenerator.createCompoundEntityRow(compoundEntityMap, 100);
-    ImmutableList<GetOnlineFeaturesRequestV2.EntityRow> entityRows = ImmutableList.of(entityRow);
+    ImmutableList<ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow> entityRows =
+        ImmutableList.of(entityRow);
 
     // Instantiate FeatureReferences
-    FeatureReferenceV2 featureReference =
+    ServingAPIProto.FeatureReferenceV2 featureReference =
         DataGenerator.createFeatureReference("rides", "trip_cost");
-    FeatureReferenceV2 notFoundFeatureReference =
+    ServingAPIProto.FeatureReferenceV2 notFoundFeatureReference =
         DataGenerator.createFeatureReference("rides", "trip_transaction");
 
-    ImmutableList<FeatureReferenceV2> featureReferences =
+    ImmutableList<ServingAPIProto.FeatureReferenceV2> featureReferences =
         ImmutableList.of(featureReference, notFoundFeatureReference);
 
     // Build GetOnlineFeaturesRequestV2
-    GetOnlineFeaturesRequestV2 onlineFeatureRequest =
+    ServingAPIProto.GetOnlineFeaturesRequestV2 onlineFeatureRequest =
         TestUtils.createOnlineFeatureRequest(projectName, featureReferences, entityRows);
-    GetOnlineFeaturesResponse featureResponse =
+    ServingAPIProto.GetOnlineFeaturesResponse featureResponse =
         servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
 
     ImmutableMap<String, ValueProto.Value> expectedValueMap =
@@ -495,93 +488,23 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
             DataGenerator.createEmptyValue());
 
-    ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
+    ImmutableMap<String, ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
         ImmutableMap.of(
             driverEntityName,
-            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
             merchantEntityName,
-            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
             FeatureV2.getFeatureStringRef(featureReference),
-            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
-            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
 
-    GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
-        GetOnlineFeaturesResponse.FieldValues.newBuilder()
+    ServingAPIProto.GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
+        ServingAPIProto.GetOnlineFeaturesResponse.FieldValues.newBuilder()
             .putAllFields(expectedValueMap)
             .putAllStatuses(expectedStatusMap)
             .build();
-    ImmutableList<GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
-        ImmutableList.of(expectedFieldValues);
-
-    assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
-  }
-
-  @Test
-  public void shouldReturnNotFoundForUpdatedType() {
-    String projectName = "default";
-    String entityName = "driver_id";
-    String featureTableName = "rides";
-
-    ImmutableList<String> entities = ImmutableList.of(entityName);
-    ImmutableMap<String, ValueProto.ValueType.Enum> features =
-        ImmutableMap.of(
-            feature1Reference.getName(),
-            ValueProto.ValueType.Enum.INT64,
-            feature2Reference.getName(),
-            ValueProto.ValueType.Enum.STRING,
-            feature3Reference.getName(),
-            ValueProto.ValueType.Enum.DOUBLE,
-            feature4Reference.getName(),
-            ValueProto.ValueType.Enum.STRING);
-
-    TestUtils.applyFeatureTable(
-        coreClient, projectName, featureTableName, entities, features, 7200);
-
-    // Sleep is necessary to ensure caching (every 1s) of updated FeatureTable is done
-    try {
-      Thread.sleep(2000);
-    } catch (InterruptedException e) {
-    }
-
-    ValueProto.Value entityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
-    // Instantiate EntityRows
-    GetOnlineFeaturesRequestV2.EntityRow entityRow1 =
-        DataGenerator.createEntityRow(entityName, DataGenerator.createInt64Value(1), 100);
-    ImmutableList<GetOnlineFeaturesRequestV2.EntityRow> entityRows = ImmutableList.of(entityRow1);
-
-    // Instantiate FeatureReferences
-    FeatureReferenceV2 featureReference =
-        DataGenerator.createFeatureReference("rides", "trip_distance");
-
-    ImmutableList<FeatureReferenceV2> featureReferences = ImmutableList.of(featureReference);
-
-    // Build GetOnlineFeaturesRequestV2
-    GetOnlineFeaturesRequestV2 onlineFeatureRequest =
-        TestUtils.createOnlineFeatureRequest(projectName, featureReferences, entityRows);
-    GetOnlineFeaturesResponse featureResponse =
-        servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
-
-    ImmutableMap<String, ValueProto.Value> expectedValueMap =
-        ImmutableMap.of(
-            entityName,
-            entityValue,
-            FeatureV2.getFeatureStringRef(featureReference),
-            DataGenerator.createEmptyValue());
-
-    ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
-        ImmutableMap.of(
-            entityName,
-            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
-            FeatureV2.getFeatureStringRef(featureReference),
-            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
-
-    GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
-        GetOnlineFeaturesResponse.FieldValues.newBuilder()
-            .putAllFields(expectedValueMap)
-            .putAllStatuses(expectedStatusMap)
-            .build();
-    ImmutableList<GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
+    ImmutableList<ServingAPIProto.GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
         ImmutableList.of(expectedFieldValues);
 
     assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
