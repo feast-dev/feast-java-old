@@ -41,32 +41,38 @@ public class NativeFeature implements Feature {
   public ValueProto.Value getFeatureValue(ValueProto.ValueType.Enum valueType) {
     ValueProto.Value finalValue;
 
-    // Add various type cases
-    switch (valueType) {
-      case STRING:
-        finalValue = ValueProto.Value.newBuilder().setStringVal((String) featureValue).build();
-        break;
-      case INT32:
-        finalValue = ValueProto.Value.newBuilder().setInt32Val((Integer) featureValue).build();
-        break;
-      case INT64:
-        finalValue = ValueProto.Value.newBuilder().setInt64Val((Integer) featureValue).build();
-        break;
-      case DOUBLE:
-        finalValue = ValueProto.Value.newBuilder().setDoubleVal((Double) featureValue).build();
-        break;
-      case FLOAT:
-        finalValue = ValueProto.Value.newBuilder().setFloatVal((Long) featureValue).build();
-        break;
-      case BYTES:
-        finalValue = ValueProto.Value.newBuilder().setBytesVal((ByteString) featureValue).build();
-        break;
-      case BOOL:
-        finalValue = ValueProto.Value.newBuilder().setBoolVal((Boolean) featureValue).build();
-        break;
-      default:
-        throw new RuntimeException("FeatureType is not supported");
+    try {
+      // Add various type cases
+      switch (valueType) {
+        case STRING:
+          finalValue = ValueProto.Value.newBuilder().setStringVal((String) featureValue).build();
+          break;
+        case INT32:
+          finalValue = ValueProto.Value.newBuilder().setInt32Val((Integer) featureValue).build();
+          break;
+        case INT64:
+          finalValue = ValueProto.Value.newBuilder().setInt64Val((Integer) featureValue).build();
+          break;
+        case DOUBLE:
+          finalValue = ValueProto.Value.newBuilder().setDoubleVal((Double) featureValue).build();
+          break;
+        case FLOAT:
+          finalValue = ValueProto.Value.newBuilder().setFloatVal((Long) featureValue).build();
+          break;
+        case BYTES:
+          finalValue = ValueProto.Value.newBuilder().setBytesVal((ByteString) featureValue).build();
+          break;
+        case BOOL:
+          finalValue = ValueProto.Value.newBuilder().setBoolVal((Boolean) featureValue).build();
+          break;
+        default:
+          throw new RuntimeException("FeatureType is not supported");
+      }
+    } catch (ClassCastException e) {
+      // Feature type has changed
+      finalValue = ValueProto.Value.newBuilder().build();
     }
+
     return finalValue;
   }
 
