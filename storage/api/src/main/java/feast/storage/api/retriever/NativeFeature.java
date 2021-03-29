@@ -72,19 +72,9 @@ public class NativeFeature implements Feature {
 
   @Override
   public Boolean isSameFeatureSpec(ValueProto.ValueType.Enum valueType) {
-    ValueProto.Value feastValue = getFeatureValue(valueType);
+    ValueProto.Value actualValue = getFeatureValue(valueType);
 
-    // Same feature reference, but different type
-    if (valueType.equals(ValueProto.ValueType.Enum.INVALID)) {
-      return false;
-    }
-
-    // Same feature reference, but empty value
-    if (feastValue.equals(ValueProto.Value.ValCase.VAL_NOT_SET)) {
-      return true;
-    }
-
-    return TYPE_TO_VAL_CASE.get(valueType).equals(feastValue.getValCase());
+    return TYPE_TO_VAL_CASE.get(valueType).equals(actualValue.getValCase());
   }
 
   @Override

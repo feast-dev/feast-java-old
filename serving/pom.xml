@@ -98,12 +98,6 @@
 
     <dependency>
       <groupId>com.google.cloud</groupId>
-      <artifactId>google-cloud-bigtable</artifactId>
-      <version>1.21.2</version>
-    </dependency>
-
-    <dependency>
-      <groupId>com.google.cloud</groupId>
       <artifactId>google-cloud-bigtable-emulator</artifactId>
       <version>0.130.2</version>
       <scope>test</scope>
