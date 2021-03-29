@@ -158,7 +158,7 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
           Boolean isFound =
               feature.isSameFeatureSpec(featureValueTypes.get(feature.getFeatureReference()));
 
-          boolean isOutsideMaxAge =
+          Boolean isOutsideMaxAge =
               checkOutsideMaxAge(
                   feature, entityRow, featureMaxAges.get(feature.getFeatureReference()));
 

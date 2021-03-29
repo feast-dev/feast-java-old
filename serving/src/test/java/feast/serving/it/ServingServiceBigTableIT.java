@@ -42,7 +42,6 @@ import feast.proto.core.EntityProto;
 import feast.proto.serving.ServingAPIProto;
 import feast.proto.serving.ServingServiceGrpc;
 import feast.proto.types.ValueProto;
-import feast.serving.config.ServingServiceConfigV2;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import java.io.ByteArrayOutputStream;
@@ -129,7 +128,6 @@ public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
     String projectName = "default";
     // Apply Entity (driver_id)
     String driverEntityName = "driver_id";
-    ValueProto.Value driverEntityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
     String driverEntityDescription = "My driver id";
     ValueProto.ValueType.Enum driverEntityType = ValueProto.ValueType.Enum.INT64;
     EntityProto.EntitySpecV2 driverEntitySpec =
@@ -142,7 +140,6 @@ public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
 
     // Apply Entity (merchant_id)
     String merchantEntityName = "merchant_id";
-    ValueProto.Value merchantEntityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
     String merchantEntityDescription = "My driver id";
     ValueProto.ValueType.Enum merchantEntityType = ValueProto.ValueType.Enum.INT64;
     EntityProto.EntitySpecV2 merchantEntitySpec =
@@ -194,10 +191,10 @@ public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
         SchemaBuilder.record("DriverData")
             .namespace(featureTableName)
             .fields()
-            .requiredInt("trip_cost")
-            .requiredDouble("trip_distance")
-            .requiredDouble("trip_empty")
-            .requiredString("trip_wrong_type")
+            .requiredInt(feature1Reference.getName())
+            .requiredDouble(feature2Reference.getName())
+            .nullableString(feature3Reference.getName(), "null")
+            .requiredString(feature4Reference.getName())
             .endRecord();
     byte[] schemaReference =
         Hashing.murmur3_32().hashBytes(ftSchema.toString().getBytes()).asBytes();
@@ -207,7 +204,7 @@ public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
         new GenericRecordBuilder(ftSchema)
             .set("trip_cost", 5)
             .set("trip_distance", 3.5)
-            .set("trip_empty", 3.5)
+            .set("trip_empty", null)
             .set("trip_wrong_type", "test")
             .build();
     byte[] avroSerializedFeatures = recordToAvro(record, ftSchema);
@@ -267,7 +264,7 @@ public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
   @AfterAll
   static void tearDown() {
     ((ManagedChannel) servingStub.getChannel()).shutdown();
-    // channel.shutdown();
+    channel.shutdown();
   }
 
   private static void createTable(
@@ -294,12 +291,9 @@ public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
   }
 
   private static byte[] recordToAvro(GenericRecord datum, Schema schema) throws IOException {
-    // DatumReader<Object> reader = new GenericDatumReader<>(schema);
     GenericDatumWriter<Object> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream output = new ByteArrayOutputStream();
-    // Decoder decoder = DecoderFactory.get().jsonDecoder(schema, json);
     Encoder encoder = EncoderFactory.get().binaryEncoder(output, null);
-    // Object datum = reader.read(null, decoder);
     writer.write(datum, encoder);
     encoder.flush();
 
@@ -338,11 +332,9 @@ public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
         DataGenerator.createFeatureReference("rides", "trip_cost");
     ServingAPIProto.FeatureReferenceV2 notFoundFeatureReference =
         DataGenerator.createFeatureReference("rides", "trip_transaction");
-    ServingAPIProto.FeatureReferenceV2 emptyFeatureReference =
-        DataGenerator.createFeatureReference("rides", "trip_empty");
 
     ImmutableList<ServingAPIProto.FeatureReferenceV2> featureReferences =
-        ImmutableList.of(featureReference, notFoundFeatureReference, emptyFeatureReference);
+        ImmutableList.of(featureReference, notFoundFeatureReference);
 
     // Build GetOnlineFeaturesRequestV2
     ServingAPIProto.GetOnlineFeaturesRequestV2 onlineFeatureRequest =
@@ -355,10 +347,8 @@ public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
             entityName,
             entityValue,
             FeatureV2.getFeatureStringRef(featureReference),
-            DataGenerator.createInt64Value(42),
+            DataGenerator.createInt64Value(5),
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
-            DataGenerator.createEmptyValue(),
-            FeatureV2.getFeatureStringRef(emptyFeatureReference),
             DataGenerator.createEmptyValue());
 
     ImmutableMap<String, ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
@@ -368,9 +358,7 @@ public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
             FeatureV2.getFeatureStringRef(featureReference),
             ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
-            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
-            FeatureV2.getFeatureStringRef(emptyFeatureReference),
-            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NULL_VALUE);
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
 
     ServingAPIProto.GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
         ServingAPIProto.GetOnlineFeaturesResponse.FieldValues.newBuilder()
@@ -384,7 +372,7 @@ public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
   }
 
   @TestConfiguration
-  public static class TestConfig extends ServingServiceConfigV2 {
+  public static class TestConfig {
     @Bean
     public BigtableDataClient bigtableClient() throws IOException {
       return BigtableDataClient.create(

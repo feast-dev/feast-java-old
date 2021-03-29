@@ -41,7 +41,6 @@ public class NativeFeature implements Feature {
   public ValueProto.Value getFeatureValue(ValueProto.ValueType.Enum valueType) {
     ValueProto.Value finalValue;
 
-    // Check error for type casting
     // Add various type cases
     switch (valueType) {
       case STRING:
@@ -54,7 +53,7 @@ public class NativeFeature implements Feature {
         finalValue = ValueProto.Value.newBuilder().setInt64Val((Integer) featureValue).build();
         break;
       case DOUBLE:
-        finalValue = ValueProto.Value.newBuilder().setDoubleVal((Long) featureValue).build();
+        finalValue = ValueProto.Value.newBuilder().setDoubleVal((Double) featureValue).build();
         break;
       case FLOAT:
         finalValue = ValueProto.Value.newBuilder().setFloatVal((Long) featureValue).build();
@@ -72,6 +71,23 @@ public class NativeFeature implements Feature {
   }
 
   @Override
+  public Boolean isSameFeatureSpec(ValueProto.ValueType.Enum valueType) {
+    ValueProto.Value feastValue = getFeatureValue(valueType);
+
+    // Same feature reference, but different type
+    if (valueType.equals(ValueProto.ValueType.Enum.INVALID)) {
+      return false;
+    }
+
+    // Same feature reference, but empty value
+    if (feastValue.equals(ValueProto.Value.ValCase.VAL_NOT_SET)) {
+      return true;
+    }
+
+    return TYPE_TO_VAL_CASE.get(valueType).equals(feastValue.getValCase());
+  }
+
+  @Override
   public ServingAPIProto.FeatureReferenceV2 getFeatureReference() {
     return this.featureReference;
   }
@@ -79,11 +95,5 @@ public class NativeFeature implements Feature {
   @Override
   public Timestamp getEventTimestamp() {
     return this.eventTimestamp;
-  }
-
-  @Override
-  public Boolean isSameFeatureSpec(ValueProto.ValueType.Enum valueType) {
-    // TODO: Implement similar logic check in ProtoFeature (but for Avro types)
-    return null;
   }
 }

@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -53,9 +54,6 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
 
   private String getTableName(String project, EntityRow entityRow) {
     List<String> entityNames = new ArrayList<>(new HashSet<>(entityRow.getFieldsMap().keySet()));
-
-    // Sort entity names by alphabetical order
-    entityNames.sort(String::compareTo);
 
     String tableName =
         String.format("%s__%s", project, entityNames.stream().collect(Collectors.joining("__")));
@@ -126,12 +124,16 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
     return featureReferences.stream()
         .map(
             featureReference -> {
-              Object featureValue = record.get(featureReference.getName());
-              if (featureValue != null) {
-                return new NativeFeature(
-                    featureReference,
-                    Timestamp.newBuilder().setSeconds(timestamp / 1000).build(),
-                    featureValue);
+              try {
+                Object featureValue = record.get(featureReference.getName());
+                if (featureValue != null) {
+                  return new NativeFeature(
+                      featureReference,
+                      Timestamp.newBuilder().setSeconds(timestamp / 1000).build(),
+                      featureValue);
+                }
+              } catch (AvroRuntimeException e) {
+                return null;
               }
               return null;
             })

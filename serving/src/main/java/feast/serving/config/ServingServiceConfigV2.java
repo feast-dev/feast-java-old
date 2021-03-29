@@ -28,6 +28,8 @@ import feast.storage.connectors.redis.retriever.*;
 import io.opentracing.Tracer;
 import java.io.IOException;
 import org.slf4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -35,11 +37,14 @@ import org.springframework.context.annotation.Configuration;
 public class ServingServiceConfigV2 {
   private static final Logger log = org.slf4j.LoggerFactory.getLogger(ServingServiceConfigV2.class);
 
-  String projectId;
-  String instanceId;
+  @Autowired private ApplicationContext context;
 
   @Bean
-  public BigtableDataClient bigtableClient() throws IOException {
+  public BigtableDataClient bigtableClient(FeastProperties feastProperties) throws IOException {
+    BigTableStoreConfig config = feastProperties.getActiveStore().getBigtableConfig();
+    String projectId = config.getProjectId();
+    String instanceId = config.getInstanceId();
+
     return BigtableDataClient.create(
         BigtableDataSettings.newBuilder()
             .setProjectId(projectId)
@@ -49,8 +54,7 @@ public class ServingServiceConfigV2 {
 
   @Bean
   public ServingServiceV2 servingServiceV2(
-      FeastProperties feastProperties, CachedSpecService specService, Tracer tracer)
-      throws IOException {
+      FeastProperties feastProperties, CachedSpecService specService, Tracer tracer) {
     ServingServiceV2 servingService = null;
     FeastProperties.Store store = feastProperties.getActiveStore();
 
@@ -67,11 +71,7 @@ public class ServingServiceConfigV2 {
         servingService = new OnlineServingServiceV2(redisRetriever, specService, tracer);
         break;
       case BIGTABLE:
-        BigTableStoreConfig config = store.getBigtableConfig();
-        projectId = config.getProjectId();
-        instanceId = config.getInstanceId();
-
-        BigtableDataClient bigtableClient = bigtableClient();
+        BigtableDataClient bigtableClient = context.getBean(BigtableDataClient.class);
         OnlineRetrieverV2 bigtableRetriever = new BigTableOnlineRetriever(bigtableClient);
         servingService = new OnlineServingServiceV2(bigtableRetriever, specService, tracer);
         break;
