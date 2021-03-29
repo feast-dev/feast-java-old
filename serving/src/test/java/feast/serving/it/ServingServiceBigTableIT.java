@@ -407,9 +407,11 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
         DataGenerator.createFeatureReference("rides", "trip_cost");
     FeatureReferenceV2 notFoundFeatureReference =
         DataGenerator.createFeatureReference("rides", "trip_transaction");
+    FeatureReferenceV2 emptyFeatureReference =
+        DataGenerator.createFeatureReference("rides", "trip_empty");
 
     ImmutableList<FeatureReferenceV2> featureReferences =
-        ImmutableList.of(featureReference, notFoundFeatureReference);
+        ImmutableList.of(featureReference, notFoundFeatureReference, emptyFeatureReference);
 
     // Build GetOnlineFeaturesRequestV2
     GetOnlineFeaturesRequestV2 onlineFeatureRequest =
@@ -424,6 +426,8 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
             FeatureV2.getFeatureStringRef(featureReference),
             DataGenerator.createInt64Value(5),
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            DataGenerator.createEmptyValue(),
+            FeatureV2.getFeatureStringRef(emptyFeatureReference),
             DataGenerator.createEmptyValue());
 
     ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
@@ -433,6 +437,8 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
             FeatureV2.getFeatureStringRef(featureReference),
             GetOnlineFeaturesResponse.FieldStatus.PRESENT,
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
+            FeatureV2.getFeatureStringRef(emptyFeatureReference),
             GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
 
     GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
