@@ -53,7 +53,6 @@ import java.util.List;
 import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
-import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
@@ -78,10 +77,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "feast.core-cache-refresh-interval=1",
+      "feast.active_store=bigtable",
       "spring.main.allow-bean-definition-overriding=true"
     })
 @Testcontainers
-public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
+public class ServingServiceBigTableIT extends BaseAuthIT {
 
   static final Map<String, String> options = new HashMap<>();
   static final String timestampPrefix = "_ts";
@@ -298,20 +298,6 @@ public class ServingServiceBigTableIT extends BaseAuthBigtableIT {
     encoder.flush();
 
     return output.toByteArray();
-  }
-
-  private static String avroToJson(byte[] avro, Schema schema) throws IOException {
-    boolean pretty = false;
-    GenericDatumReader<Object> reader = new GenericDatumReader<>(schema);
-    DatumWriter<Object> writer = new GenericDatumWriter<>(schema);
-    ByteArrayOutputStream output = new ByteArrayOutputStream();
-    JsonEncoder encoder = EncoderFactory.get().jsonEncoder(schema, output, pretty);
-    Decoder decoder = DecoderFactory.get().binaryDecoder(avro, null);
-    Object datum = reader.read(null, decoder);
-    writer.write(datum, encoder);
-    encoder.flush();
-    output.flush();
-    return new String(output.toByteArray(), "UTF-8");
   }
 
   @Test

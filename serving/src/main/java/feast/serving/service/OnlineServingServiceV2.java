@@ -19,9 +19,7 @@ package feast.serving.service;
 import static feast.common.models.FeatureTable.getFeatureTableStringRef;
 
 import com.google.protobuf.Duration;
-import com.google.protobuf.ProtocolStringList;
 import feast.common.models.FeatureV2;
-import feast.proto.core.FeatureTableProto;
 import feast.proto.serving.ServingAPIProto.FeastServingType;
 import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
 import feast.proto.serving.ServingAPIProto.GetFeastServingInfoRequest;
@@ -88,11 +86,7 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
                         .map(
                             entry ->
                                 Pair.of(
-                                    entry.getKey(),
-                                    getMetadata(
-                                        entry.getValue(),
-                                        false,
-                                        false)))
+                                    entry.getKey(), getMetadata(entry.getValue(), false, false)))
                         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight)))
             .collect(Collectors.toList());
 
@@ -104,9 +98,11 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
                 Collectors.toMap(
                     Function.identity(),
                     ref -> specService.getFeatureTableSpec(finalProjectName, ref).getMaxAge()));
-    List<String> entityNames = featureReferences.stream().map(
-        ref -> specService.getFeatureTableSpec(finalProjectName, ref).getEntitiesList()
-    ).findFirst().get();
+    List<String> entityNames =
+        featureReferences.stream()
+            .map(ref -> specService.getFeatureTableSpec(finalProjectName, ref).getEntitiesList())
+            .findFirst()
+            .get();
 
     Map<FeatureReferenceV2, ValueProto.ValueType.Enum> featureValueTypes =
         featureReferences.stream()

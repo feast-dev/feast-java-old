@@ -79,7 +79,8 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
     return stringRepr;
   }
 
-  private ByteString convertEntityValueToBigTableKey(EntityRow entityRow, List<String> entityNames) {
+  private ByteString convertEntityValueToBigTableKey(
+      EntityRow entityRow, List<String> entityNames) {
     return ByteString.copyFrom(
         entityNames.stream()
             .map(entity -> entityRow.getFieldsMap().get(entity))
@@ -151,7 +152,10 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
   }
 
   private ServerStream<Row> getFeaturesFromBigTable(
-      String tableName, List<EntityRow> entityRows, List<String> columnFamilies, List<String> entityNames) {
+      String tableName,
+      List<EntityRow> entityRows,
+      List<String> columnFamilies,
+      List<String> entityNames) {
 
     Query rowQuery = Query.create(tableName);
     Filters.InterleaveFilter familyFilter = Filters.FILTERS.interleave();
