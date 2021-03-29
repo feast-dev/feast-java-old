@@ -54,6 +54,11 @@ feast:
         read_from: MASTER
         # Redis operation timeout in ISO-8601 format
         timeout: PT0.5S
+    - name: bigtable
+      type: BIGTABLE
+      config:
+        project_id: <gcp_project>
+        instance_id: <gcp_bigtable_instance>
   tracing:
     # If true, Feast will provide tracing data (using OpenTracing API) for various RPC method calls
     # which can be useful to debug performance issues and perform benchmarking
