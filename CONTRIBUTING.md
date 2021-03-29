@@ -36,6 +36,26 @@ mvn spotless:apply
 > If you're using IntelliJ, you can import these [code style settings](https://github.com/google/styleguide/blob/gh-pages/intellij-java-google-style.xml)
 > if you'd like to use the IDE's reformat function.
 
+#### Project Makefile
+The Project Makefile provides useful shorthands for common development tasks:
+
+
+Run all Unit tests:
+```
+make test-java
+```
+
+Run all Integration tests:
+```
+make test-java-integration
+```
+
+Building Docker images for Feast Core &amp; Feast Serving:
+```
+make build-docker REGISTRY=gcr.io/kf-feast VERSION=develop
+```
+
+
 ## Feast Core
 ### Environment Setup
 Setting up your Development Environment for Feast Core:
