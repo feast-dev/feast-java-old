@@ -88,7 +88,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
   static CoreSimpleAPIClient coreClient;
   static ServingServiceGrpc.ServingServiceBlockingStub servingStub;
 
-  static final int FEAST_SERVING_PORT = 6568;
+  static final int FEAST_SERVING_PORT = 6569;
 
   static final String PROJECT_ID = "test-project";
   static final String INSTANCE_ID = "test-instance";
@@ -506,6 +506,100 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
             .build();
     ImmutableList<ServingAPIProto.GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
         ImmutableList.of(expectedFieldValues);
+
+    assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
+  }
+
+  @Test
+  public void shouldReturnCorrectRowCount() {
+    // getOnlineFeatures Information
+    String projectName = "default";
+    String entityName = "driver_id";
+    ValueProto.Value entityValue1 = ValueProto.Value.newBuilder().setInt64Val(1).build();
+    ValueProto.Value entityValue2 = ValueProto.Value.newBuilder().setInt64Val(2).build();
+
+    // Instantiate EntityRows
+    ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow entityRow1 =
+        DataGenerator.createEntityRow(entityName, entityValue1, 100);
+    ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow entityRow2 =
+        DataGenerator.createEntityRow(entityName, entityValue2, 100);
+    ImmutableList<ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow> entityRows =
+        ImmutableList.of(entityRow1, entityRow2);
+
+    // Instantiate FeatureReferences
+    ServingAPIProto.FeatureReferenceV2 featureReference =
+        DataGenerator.createFeatureReference("rides", "trip_cost");
+    ServingAPIProto.FeatureReferenceV2 notFoundFeatureReference =
+        DataGenerator.createFeatureReference("rides", "trip_transaction");
+    ServingAPIProto.FeatureReferenceV2 emptyFeatureReference =
+        DataGenerator.createFeatureReference("rides", "trip_empty");
+
+    ImmutableList<ServingAPIProto.FeatureReferenceV2> featureReferences =
+        ImmutableList.of(featureReference, notFoundFeatureReference, emptyFeatureReference);
+
+    // Build GetOnlineFeaturesRequestV2
+    ServingAPIProto.GetOnlineFeaturesRequestV2 onlineFeatureRequest =
+        TestUtils.createOnlineFeatureRequest(projectName, featureReferences, entityRows);
+    ServingAPIProto.GetOnlineFeaturesResponse featureResponse =
+        servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
+
+    ImmutableMap<String, ValueProto.Value> expectedValueMap =
+        ImmutableMap.of(
+            entityName,
+            entityValue1,
+            FeatureV2.getFeatureStringRef(featureReference),
+            DataGenerator.createInt64Value(5),
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            DataGenerator.createEmptyValue(),
+            FeatureV2.getFeatureStringRef(emptyFeatureReference),
+            DataGenerator.createEmptyValue());
+
+    ImmutableMap<String, ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
+        ImmutableMap.of(
+            entityName,
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(featureReference),
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
+            FeatureV2.getFeatureStringRef(emptyFeatureReference),
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
+
+    ServingAPIProto.GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
+        ServingAPIProto.GetOnlineFeaturesResponse.FieldValues.newBuilder()
+            .putAllFields(expectedValueMap)
+            .putAllStatuses(expectedStatusMap)
+            .build();
+
+    ImmutableMap<String, ValueProto.Value> expectedValueMap2 =
+        ImmutableMap.of(
+            entityName,
+            entityValue2,
+            FeatureV2.getFeatureStringRef(featureReference),
+            DataGenerator.createEmptyValue(),
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            DataGenerator.createEmptyValue(),
+            FeatureV2.getFeatureStringRef(emptyFeatureReference),
+            DataGenerator.createEmptyValue());
+
+    ImmutableMap<String, ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap2 =
+        ImmutableMap.of(
+            entityName,
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(featureReference),
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
+            FeatureV2.getFeatureStringRef(emptyFeatureReference),
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
+
+    ServingAPIProto.GetOnlineFeaturesResponse.FieldValues expectedFieldValues2 =
+        ServingAPIProto.GetOnlineFeaturesResponse.FieldValues.newBuilder()
+            .putAllFields(expectedValueMap2)
+            .putAllStatuses(expectedStatusMap2)
+            .build();
+    ImmutableList<ServingAPIProto.GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
+        ImmutableList.of(expectedFieldValues, expectedFieldValues2);
 
     assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
   }
