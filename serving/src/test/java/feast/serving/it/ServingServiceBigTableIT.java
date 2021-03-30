@@ -388,7 +388,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
   }
 
   @Test
-  public void shouldRegisterAndGetOnlineFeaturesWithNotFound() {
+  public void shouldRegisterSingleEntityAndGetOnlineFeatures() {
     // getOnlineFeatures Information
     String projectName = "default";
     String entityName = "driver_id";
