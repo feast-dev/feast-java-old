@@ -16,7 +16,6 @@
  */
 package feast.storage.connectors.bigtable.retriever;
 
-import com.google.api.gax.rpc.ServerStream;
 import com.google.cloud.bigtable.data.v2.BigtableDataClient;
 import com.google.cloud.bigtable.data.v2.models.Filters;
 import com.google.cloud.bigtable.data.v2.models.Query;
@@ -30,9 +29,10 @@ import feast.storage.api.retriever.Feature;
 import feast.storage.api.retriever.NativeFeature;
 import feast.storage.api.retriever.OnlineRetrieverV2;
 import java.io.IOException;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
@@ -143,40 +143,47 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
     List<String> columnFamilies = getColumnFamilies(featureReferences);
     String tableName = getTableName(project, entityNames);
 
-    ServerStream<Row> rowsFromBigTable =
-        getFeaturesFromBigTable(tableName, entityRows, columnFamilies, entityNames);
+    List<ByteString> rowKeys =
+        entityRows.stream()
+            .map(row -> convertEntityValueToBigTableKey(row, entityNames))
+            .collect(Collectors.toList());
+    Map<ByteString, Row> rowsFromBigTable =
+        getFeaturesFromBigTable(tableName, rowKeys, columnFamilies);
     List<List<Feature>> features =
-        convertRowToFeature(tableName, rowsFromBigTable, featureReferences);
+        convertRowToFeature(tableName, rowKeys, rowsFromBigTable, featureReferences);
 
     return features;
   }
 
-  private ServerStream<Row> getFeaturesFromBigTable(
-      String tableName,
-      List<EntityRow> entityRows,
-      List<String> columnFamilies,
-      List<String> entityNames) {
+  private Map<ByteString, Row> getFeaturesFromBigTable(
+      String tableName, List<ByteString> rowKeys, List<String> columnFamilies) {
 
     Query rowQuery = Query.create(tableName);
     Filters.InterleaveFilter familyFilter = Filters.FILTERS.interleave();
     columnFamilies.forEach(cf -> familyFilter.filter(Filters.FILTERS.family().exactMatch(cf)));
 
-    for (EntityRow row : entityRows) {
-      ByteString rowKey = convertEntityValueToBigTableKey(row, entityNames);
-      rowQuery = rowQuery.rowKey(rowKey);
+    for (ByteString rowKey : rowKeys) {
+      rowQuery.rowKey(rowKey);
     }
 
-    return client.readRows(rowQuery);
+    return StreamSupport.stream(client.readRows(rowQuery).spliterator(), false)
+        .collect(Collectors.toMap(Row::getKey, Function.identity()));
   }
 
   private List<List<Feature>> convertRowToFeature(
-      String tableName, ServerStream<Row> rows, List<FeatureReferenceV2> featureReferences) {
+      String tableName,
+      List<ByteString> rowKeys,
+      Map<ByteString, Row> rows,
+      List<FeatureReferenceV2> featureReferences) {
 
-    return StreamSupport.stream(rows.spliterator(), false)
-        .flatMap(
-            row ->
-                row.getCells().stream()
-                    .map(
+    return rowKeys.stream()
+        .map(
+            rowKey -> {
+              if (!rows.containsKey(rowKey)) {
+                return Collections.<Feature>emptyList();
+              } else {
+                return rows.get(rowKey).getCells().stream()
+                    .flatMap(
                         rowCell -> {
                           String family = rowCell.getFamily();
                           ByteString value = rowCell.getValue();
@@ -200,8 +207,11 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
                             throw new RuntimeException("Failed to decode features from BigTable");
                           }
 
-                          return features;
-                        }))
+                          return features.stream();
+                        })
+                    .collect(Collectors.toList());
+              }
+            })
         .collect(Collectors.toList());
   }
 }
