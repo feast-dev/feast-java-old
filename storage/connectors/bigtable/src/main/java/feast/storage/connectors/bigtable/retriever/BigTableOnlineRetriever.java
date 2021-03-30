@@ -32,7 +32,6 @@ import java.io.IOException;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;

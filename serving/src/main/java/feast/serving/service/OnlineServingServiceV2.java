@@ -83,10 +83,7 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
             .map(
                 r ->
                     r.getFieldsMap().entrySet().stream()
-                        .map(
-                            entry ->
-                                Pair.of(
-                                    entry.getKey(), getMetadata(entry.getValue(), false, false)))
+                        .map(entry -> Pair.of(entry.getKey(), getMetadata(entry.getValue(), false)))
                         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight)))
             .collect(Collectors.toList());
 
@@ -156,16 +153,6 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
           ValueProto.Value value =
               feature.getFeatureValue(featureValueTypes.get(feature.getFeatureReference()));
 
-          Boolean isFound;
-          if (value == null) {
-            isFound = false;
-          } else {
-            isFound =
-                Feature.TYPE_TO_VAL_CASE
-                    .get(featureValueTypes.get(feature.getFeatureReference()))
-                    .equals(value.getValCase());
-          }
-
           Boolean isOutsideMaxAge =
               checkOutsideMaxAge(
                   feature, entityRow, featureMaxAges.get(feature.getFeatureReference()));
@@ -180,14 +167,14 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
 
           rowStatuses.put(
               FeatureV2.getFeatureStringRef(feature.getFeatureReference()),
-              getMetadata(value, !isFound, isOutsideMaxAge));
+              getMetadata(value, isOutsideMaxAge));
         } else {
           rowValues.put(
               FeatureV2.getFeatureStringRef(featureReference),
               ValueProto.Value.newBuilder().build());
 
           rowStatuses.put(
-              FeatureV2.getFeatureStringRef(featureReference), getMetadata(null, true, false));
+              FeatureV2.getFeatureStringRef(featureReference), getMetadata(null, false));
         }
       }
       // Populate metrics/log request
@@ -230,13 +217,13 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
    *     given valueMap.
    */
   private static GetOnlineFeaturesResponse.FieldStatus getMetadata(
-      ValueProto.Value value, boolean isNotFound, boolean isOutsideMaxAge) {
+      ValueProto.Value value, boolean isOutsideMaxAge) {
 
-    if (isNotFound) {
+    if (value == null) {
       return GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND;
     } else if (isOutsideMaxAge) {
       return GetOnlineFeaturesResponse.FieldStatus.OUTSIDE_MAX_AGE;
-    } else if (value == null || value.getValCase().equals(ValueProto.Value.ValCase.VAL_NOT_SET)) {
+    } else if (value.getValCase().equals(ValueProto.Value.ValCase.VAL_NOT_SET)) {
       return GetOnlineFeaturesResponse.FieldStatus.NULL_VALUE;
     }
     return GetOnlineFeaturesResponse.FieldStatus.PRESENT;
