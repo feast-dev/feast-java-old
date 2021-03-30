@@ -46,21 +46,6 @@ public class ProtoFeature implements Feature {
   }
 
   @Override
-  public Boolean isSameFeatureSpec(ValueProto.ValueType.Enum valueType) {
-    // Same feature reference, but different type
-    if (valueType.equals(ValueProto.ValueType.Enum.INVALID)) {
-      return false;
-    }
-
-    // Same feature reference, but empty value
-    if (this.featureValue.getValCase().equals(ValueProto.Value.ValCase.VAL_NOT_SET)) {
-      return true;
-    }
-
-    return TYPE_TO_VAL_CASE.get(valueType).equals(this.featureValue.getValCase());
-  }
-
-  @Override
   public ServingAPIProto.FeatureReferenceV2 getFeatureReference() {
     return this.featureReference;
   }

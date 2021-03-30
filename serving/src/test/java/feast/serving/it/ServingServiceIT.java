@@ -313,7 +313,7 @@ public class ServingServiceIT extends BaseAuthIT {
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
             GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
             FeatureV2.getFeatureStringRef(emptyFeatureReference),
-            GetOnlineFeaturesResponse.FieldStatus.NULL_VALUE);
+            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
 
     GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
         GetOnlineFeaturesResponse.FieldValues.newBuilder()

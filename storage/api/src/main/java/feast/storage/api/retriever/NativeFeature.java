@@ -77,13 +77,6 @@ public class NativeFeature implements Feature {
   }
 
   @Override
-  public Boolean isSameFeatureSpec(ValueProto.ValueType.Enum valueType) {
-    ValueProto.Value actualValue = getFeatureValue(valueType);
-
-    return TYPE_TO_VAL_CASE.get(valueType).equals(actualValue.getValCase());
-  }
-
-  @Override
   public ServingAPIProto.FeatureReferenceV2 getFeatureReference() {
     return this.featureReference;
   }

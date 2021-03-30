@@ -49,6 +49,4 @@ public interface Feature {
   FeatureReferenceV2 getFeatureReference();
 
   Timestamp getEventTimestamp();
-
-  Boolean isSameFeatureSpec(ValueProto.ValueType.Enum anEnum);
 }

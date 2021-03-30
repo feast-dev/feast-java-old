@@ -155,8 +155,16 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
 
           ValueProto.Value value =
               feature.getFeatureValue(featureValueTypes.get(feature.getFeatureReference()));
-          Boolean isFound =
-              feature.isSameFeatureSpec(featureValueTypes.get(feature.getFeatureReference()));
+
+          Boolean isFound;
+          if (value == null) {
+            isFound = false;
+          } else {
+            isFound =
+                Feature.TYPE_TO_VAL_CASE
+                    .get(featureValueTypes.get(feature.getFeatureReference()))
+                    .equals(value.getValCase());
+          }
 
           Boolean isOutsideMaxAge =
               checkOutsideMaxAge(
