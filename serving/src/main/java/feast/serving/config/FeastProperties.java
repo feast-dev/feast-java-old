@@ -26,6 +26,7 @@ import feast.common.auth.config.SecurityProperties.AuthenticationProperties;
 import feast.common.auth.config.SecurityProperties.AuthorizationProperties;
 import feast.common.auth.credentials.CoreAuthenticationProperties;
 import feast.common.logging.config.LoggingProperties;
+import feast.storage.connectors.bigtable.retriever.BigTableStoreConfig;
 import feast.storage.connectors.redis.retriever.RedisClusterStoreConfig;
 import feast.storage.connectors.redis.retriever.RedisStoreConfig;
 import io.lettuce.core.ReadFrom;
@@ -269,7 +270,7 @@ public class FeastProperties {
     }
 
     /**
-     * Gets the store type. Example are REDIS or REDIS_CLUSTER
+     * Gets the store type. Example are REDIS, REDIS_CLUSTER or BIGTABLE
      *
      * @return the store type as a String.
      */
@@ -311,6 +312,10 @@ public class FeastProperties {
           Boolean.valueOf(this.config.getOrDefault("ssl", "false")));
     }
 
+    public BigTableStoreConfig getBigtableConfig() {
+      return new BigTableStoreConfig(this.config.get("project_id"), this.config.get("instance_id"));
+    }
+
     /**
      * Sets the store config. Please protos/feast/core/Store.proto for the specific options for each
      * store.
@@ -323,6 +328,7 @@ public class FeastProperties {
   }
 
   public enum StoreType {
+    BIGTABLE,
     REDIS,
     REDIS_CLUSTER;
   }

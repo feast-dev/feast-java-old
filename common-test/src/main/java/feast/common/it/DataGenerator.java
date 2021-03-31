@@ -53,6 +53,28 @@ public class DataGenerator {
     return defaultSubscription;
   }
 
+  public static String valueToString(ValueProto.Value v) {
+    String stringRepr;
+    switch (v.getValCase()) {
+      case STRING_VAL:
+        stringRepr = v.getStringVal();
+        break;
+      case INT64_VAL:
+        stringRepr = String.valueOf(v.getInt64Val());
+        break;
+      case INT32_VAL:
+        stringRepr = String.valueOf(v.getInt32Val());
+        break;
+      case BYTES_VAL:
+        stringRepr = v.getBytesVal().toString();
+        break;
+      default:
+        throw new RuntimeException("Type is not supported to be entity");
+    }
+
+    return stringRepr;
+  }
+
   public static StoreProto.Store getDefaultStore() {
     return defaultStore;
   }
@@ -245,6 +267,18 @@ public class DataGenerator {
         .setTimestamp(Timestamp.newBuilder().setSeconds(seconds))
         .putFields(entityName, entityValue)
         .build();
+  }
+
+  public static ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow createCompoundEntityRow(
+      ImmutableMap<String, ValueProto.Value> entityNameValues, long seconds) {
+    ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow.Builder entityRow =
+        ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow.newBuilder()
+            .setTimestamp(Timestamp.newBuilder().setSeconds(seconds));
+
+    entityNameValues.entrySet().stream()
+        .forEach(entry -> entityRow.putFields(entry.getKey(), entry.getValue()));
+
+    return entityRow.build();
   }
 
   public static DataSource createKinesisDataSourceSpec(

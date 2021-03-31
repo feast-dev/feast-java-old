@@ -16,26 +16,47 @@
  */
 package feast.serving.config;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.cloud.bigtable.data.v2.BigtableDataClient;
+import com.google.cloud.bigtable.data.v2.BigtableDataSettings;
 import feast.serving.service.OnlineServingServiceV2;
 import feast.serving.service.ServingServiceV2;
 import feast.serving.specs.CachedSpecService;
 import feast.storage.api.retriever.OnlineRetrieverV2;
+import feast.storage.connectors.bigtable.retriever.BigTableOnlineRetriever;
+import feast.storage.connectors.bigtable.retriever.BigTableStoreConfig;
 import feast.storage.connectors.redis.retriever.*;
 import io.opentracing.Tracer;
+import java.io.IOException;
 import org.slf4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 
 @Configuration
 public class ServingServiceConfigV2 {
   private static final Logger log = org.slf4j.LoggerFactory.getLogger(ServingServiceConfigV2.class);
 
+  @Autowired private ApplicationContext context;
+
+  @Bean
+  @Lazy(true)
+  public BigtableDataClient bigtableClient(FeastProperties feastProperties) throws IOException {
+    BigTableStoreConfig config = feastProperties.getActiveStore().getBigtableConfig();
+    String projectId = config.getProjectId();
+    String instanceId = config.getInstanceId();
+
+    return BigtableDataClient.create(
+        BigtableDataSettings.newBuilder()
+            .setProjectId(projectId)
+            .setInstanceId(instanceId)
+            .build());
+  }
+
   @Bean
   public ServingServiceV2 servingServiceV2(
-      FeastProperties feastProperties, CachedSpecService specService, Tracer tracer)
-      throws InvalidProtocolBufferException, JsonProcessingException {
+      FeastProperties feastProperties, CachedSpecService specService, Tracer tracer) {
     ServingServiceV2 servingService = null;
     FeastProperties.Store store = feastProperties.getActiveStore();
 
@@ -50,6 +71,11 @@ public class ServingServiceConfigV2 {
         RedisClientAdapter redisClient = RedisClient.create(store.getRedisConfig());
         OnlineRetrieverV2 redisRetriever = new OnlineRetriever(redisClient);
         servingService = new OnlineServingServiceV2(redisRetriever, specService, tracer);
+        break;
+      case BIGTABLE:
+        BigtableDataClient bigtableClient = context.getBean(BigtableDataClient.class);
+        OnlineRetrieverV2 bigtableRetriever = new BigTableOnlineRetriever(bigtableClient);
+        servingService = new OnlineServingServiceV2(bigtableRetriever, specService, tracer);
         break;
     }
 

@@ -39,6 +39,7 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 
 public class OnlineServingServiceV2 implements ServingServiceV2 {
@@ -47,27 +48,6 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
   private final CachedSpecService specService;
   private final Tracer tracer;
   private final OnlineRetrieverV2 retriever;
-
-  private static final HashMap<ValueProto.ValueType.Enum, ValueProto.Value.ValCase>
-      TYPE_TO_VAL_CASE =
-          new HashMap<>() {
-            {
-              put(ValueProto.ValueType.Enum.BYTES, ValueProto.Value.ValCase.BYTES_VAL);
-              put(ValueProto.ValueType.Enum.STRING, ValueProto.Value.ValCase.STRING_VAL);
-              put(ValueProto.ValueType.Enum.INT32, ValueProto.Value.ValCase.INT32_VAL);
-              put(ValueProto.ValueType.Enum.INT64, ValueProto.Value.ValCase.INT64_VAL);
-              put(ValueProto.ValueType.Enum.DOUBLE, ValueProto.Value.ValCase.DOUBLE_VAL);
-              put(ValueProto.ValueType.Enum.FLOAT, ValueProto.Value.ValCase.FLOAT_VAL);
-              put(ValueProto.ValueType.Enum.BOOL, ValueProto.Value.ValCase.BOOL_VAL);
-              put(ValueProto.ValueType.Enum.BYTES_LIST, ValueProto.Value.ValCase.BYTES_LIST_VAL);
-              put(ValueProto.ValueType.Enum.STRING_LIST, ValueProto.Value.ValCase.STRING_LIST_VAL);
-              put(ValueProto.ValueType.Enum.INT32_LIST, ValueProto.Value.ValCase.INT32_LIST_VAL);
-              put(ValueProto.ValueType.Enum.INT64_LIST, ValueProto.Value.ValCase.INT64_LIST_VAL);
-              put(ValueProto.ValueType.Enum.DOUBLE_LIST, ValueProto.Value.ValCase.DOUBLE_LIST_VAL);
-              put(ValueProto.ValueType.Enum.FLOAT_LIST, ValueProto.Value.ValCase.FLOAT_LIST_VAL);
-              put(ValueProto.ValueType.Enum.BOOL_LIST, ValueProto.Value.ValCase.BOOL_LIST_VAL);
-            }
-          };
 
   public OnlineServingServiceV2(
       OnlineRetrieverV2 retriever, CachedSpecService specService, Tracer tracer) {
@@ -100,27 +80,12 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
         entityRows.stream().map(r -> new HashMap<>(r.getFieldsMap())).collect(Collectors.toList());
     List<Map<String, GetOnlineFeaturesResponse.FieldStatus>> statuses =
         entityRows.stream()
-            .map(r -> getMetadataMap(r.getFieldsMap(), false, false))
+            .map(
+                r ->
+                    r.getFieldsMap().entrySet().stream()
+                        .map(entry -> Pair.of(entry.getKey(), getMetadata(entry.getValue(), false)))
+                        .collect(Collectors.toMap(Pair::getLeft, Pair::getRight)))
             .collect(Collectors.toList());
-
-    Span storageRetrievalSpan = tracer.buildSpan("storageRetrieval").start();
-    if (storageRetrievalSpan != null) {
-      storageRetrievalSpan.setTag("entities", entityRows.size());
-      storageRetrievalSpan.setTag("features", featureReferences.size());
-    }
-    List<List<Feature>> entityRowsFeatures =
-        retriever.getOnlineFeatures(projectName, entityRows, featureReferences);
-    if (storageRetrievalSpan != null) {
-      storageRetrievalSpan.finish();
-    }
-
-    if (entityRowsFeatures.size() != entityRows.size()) {
-      throw Status.INTERNAL
-          .withDescription(
-              "The no. of FeatureRow obtained from OnlineRetriever"
-                  + "does not match no. of entityRow passed.")
-          .asRuntimeException();
-    }
 
     String finalProjectName = projectName;
     Map<FeatureReferenceV2, Duration> featureMaxAges =
@@ -130,6 +95,11 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
                 Collectors.toMap(
                     Function.identity(),
                     ref -> specService.getFeatureTableSpec(finalProjectName, ref).getMaxAge()));
+    List<String> entityNames =
+        featureReferences.stream()
+            .map(ref -> specService.getFeatureTableSpec(finalProjectName, ref).getEntitiesList())
+            .findFirst()
+            .get();
 
     Map<FeatureReferenceV2, ValueProto.ValueType.Enum> featureValueTypes =
         featureReferences.stream()
@@ -144,6 +114,25 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
                         return ValueProto.ValueType.Enum.INVALID;
                       }
                     }));
+
+    Span storageRetrievalSpan = tracer.buildSpan("storageRetrieval").start();
+    if (storageRetrievalSpan != null) {
+      storageRetrievalSpan.setTag("entities", entityRows.size());
+      storageRetrievalSpan.setTag("features", featureReferences.size());
+    }
+    List<List<Feature>> entityRowsFeatures =
+        retriever.getOnlineFeatures(projectName, entityRows, featureReferences, entityNames);
+    if (storageRetrievalSpan != null) {
+      storageRetrievalSpan.finish();
+    }
+
+    if (entityRowsFeatures.size() != entityRows.size()) {
+      throw Status.INTERNAL
+          .withDescription(
+              "The no. of FeatureRow obtained from OnlineRetriever"
+                  + "does not match no. of entityRow passed.")
+          .asRuntimeException();
+    }
 
     Span postProcessingSpan = tracer.buildSpan("postProcessing").start();
 
@@ -161,44 +150,35 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
         if (featureReferenceFeatureMap.containsKey(featureReference)) {
           Feature feature = featureReferenceFeatureMap.get(featureReference);
 
-          ValueProto.Value.ValCase valueCase = feature.getFeatureValue().getValCase();
+          ValueProto.Value value =
+              feature.getFeatureValue(featureValueTypes.get(feature.getFeatureReference()));
 
-          boolean isMatchingFeatureSpec =
-              checkSameFeatureSpec(featureValueTypes.get(feature.getFeatureReference()), valueCase);
-          boolean isOutsideMaxAge =
+          Boolean isOutsideMaxAge =
               checkOutsideMaxAge(
                   feature, entityRow, featureMaxAges.get(feature.getFeatureReference()));
 
-          Map<String, ValueProto.Value> valueMap =
-              unpackValueMap(feature, isOutsideMaxAge, isMatchingFeatureSpec);
-          rowValues.putAll(valueMap);
+          if (!isOutsideMaxAge && value != null) {
+            rowValues.put(FeatureV2.getFeatureStringRef(feature.getFeatureReference()), value);
+          } else {
+            rowValues.put(
+                FeatureV2.getFeatureStringRef(feature.getFeatureReference()),
+                ValueProto.Value.newBuilder().build());
+          }
 
-          // Generate metadata for feature values and merge into entityFieldsMap
-          Map<String, GetOnlineFeaturesResponse.FieldStatus> statusMap =
-              getMetadataMap(valueMap, !isMatchingFeatureSpec, isOutsideMaxAge);
-          rowStatuses.putAll(statusMap);
-
-          // Populate metrics/log request
-          populateCountMetrics(statusMap, projectName);
+          rowStatuses.put(
+              FeatureV2.getFeatureStringRef(feature.getFeatureReference()),
+              getMetadata(value, isOutsideMaxAge));
         } else {
-          Map<String, ValueProto.Value> valueMap =
-              new HashMap<>() {
-                {
-                  put(
-                      FeatureV2.getFeatureStringRef(featureReference),
-                      ValueProto.Value.newBuilder().build());
-                }
-              };
-          rowValues.putAll(valueMap);
+          rowValues.put(
+              FeatureV2.getFeatureStringRef(featureReference),
+              ValueProto.Value.newBuilder().build());
 
-          Map<String, GetOnlineFeaturesResponse.FieldStatus> statusMap =
-              getMetadataMap(valueMap, true, false);
-          rowStatuses.putAll(statusMap);
-
-          // Populate metrics/log request
-          populateCountMetrics(statusMap, projectName);
+          rowStatuses.put(
+              FeatureV2.getFeatureStringRef(featureReference), getMetadata(null, false));
         }
       }
+      // Populate metrics/log request
+      populateCountMetrics(rowStatuses, projectName);
     }
 
     if (postProcessingSpan != null) {
@@ -222,19 +202,6 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
     return GetOnlineFeaturesResponse.newBuilder().addAllFieldValues(fieldValuesList).build();
   }
 
-  private boolean checkSameFeatureSpec(
-      ValueProto.ValueType.Enum valueTypeEnum, ValueProto.Value.ValCase valueCase) {
-    if (valueTypeEnum.equals(ValueProto.ValueType.Enum.INVALID)) {
-      return false;
-    }
-
-    if (valueCase.equals(ValueProto.Value.ValCase.VAL_NOT_SET)) {
-      return true;
-    }
-
-    return TYPE_TO_VAL_CASE.get(valueTypeEnum).equals(valueCase);
-  }
-
   private static Map<FeatureReferenceV2, Feature> getFeatureRefFeatureMap(List<Feature> features) {
     return features.stream()
         .collect(Collectors.toMap(Feature::getFeatureReference, Function.identity()));
@@ -243,47 +210,23 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
   /**
    * Generate Field level Status metadata for the given valueMap.
    *
-   * @param valueMap map of field name to value to generate metadata for.
-   * @param isNotFound whether the given valueMap represents values that were not found in the
-   *     online retriever.
+   * @param value value to generate metadata for.
    * @param isOutsideMaxAge whether the given valueMap contains values with age outside
    *     FeatureTable's max age.
    * @return a 1:1 map keyed by field name containing field status metadata instead of values in the
    *     given valueMap.
    */
-  private static Map<String, GetOnlineFeaturesResponse.FieldStatus> getMetadataMap(
-      Map<String, ValueProto.Value> valueMap, boolean isNotFound, boolean isOutsideMaxAge) {
-    return valueMap.entrySet().stream()
-        .collect(
-            Collectors.toMap(
-                Map.Entry::getKey,
-                es -> {
-                  ValueProto.Value fieldValue = es.getValue();
-                  if (isNotFound) {
-                    return GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND;
-                  } else if (isOutsideMaxAge) {
-                    return GetOnlineFeaturesResponse.FieldStatus.OUTSIDE_MAX_AGE;
-                  } else if (fieldValue.getValCase().equals(ValueProto.Value.ValCase.VAL_NOT_SET)) {
-                    return GetOnlineFeaturesResponse.FieldStatus.NULL_VALUE;
-                  }
-                  return GetOnlineFeaturesResponse.FieldStatus.PRESENT;
-                }));
-  }
+  private static GetOnlineFeaturesResponse.FieldStatus getMetadata(
+      ValueProto.Value value, boolean isOutsideMaxAge) {
 
-  private static Map<String, ValueProto.Value> unpackValueMap(
-      Feature feature, boolean isOutsideMaxAge, boolean isMatchingFeatureSpec) {
-    Map<String, ValueProto.Value> valueMap = new HashMap<>();
-
-    if (!isOutsideMaxAge && isMatchingFeatureSpec) {
-      valueMap.put(
-          FeatureV2.getFeatureStringRef(feature.getFeatureReference()), feature.getFeatureValue());
-    } else {
-      valueMap.put(
-          FeatureV2.getFeatureStringRef(feature.getFeatureReference()),
-          ValueProto.Value.newBuilder().build());
+    if (value == null) {
+      return GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND;
+    } else if (isOutsideMaxAge) {
+      return GetOnlineFeaturesResponse.FieldStatus.OUTSIDE_MAX_AGE;
+    } else if (value.getValCase().equals(ValueProto.Value.ValCase.VAL_NOT_SET)) {
+      return GetOnlineFeaturesResponse.FieldStatus.NULL_VALUE;
     }
-
-    return valueMap;
+    return GetOnlineFeaturesResponse.FieldStatus.PRESENT;
   }
 
   /**

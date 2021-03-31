@@ -51,6 +51,9 @@ public class BaseAuthIT {
   static final String REDIS = "redis_1";
   static final int REDIS_PORT = 6379;
 
+  static final String BIGTABLE = "bigtable_1";
+  static final int BIGTABLE_PORT = 8086;
+
   static final int FEAST_CORE_PORT = 6565;
 
   @DynamicPropertySource
@@ -71,6 +74,11 @@ public class BaseAuthIT {
     registry.add("feast.stores[0].config.port", () -> REDIS_PORT);
     registry.add("feast.stores[0].subscriptions[0].name", () -> "*");
     registry.add("feast.stores[0].subscriptions[0].project", () -> "*");
+
+    registry.add("feast.stores[1].name", () -> "bigtable");
+    registry.add("feast.stores[1].type", () -> "BIGTABLE");
+    registry.add("feast.stores[1].config.project_id", () -> "test-project");
+    registry.add("feast.stores[1].config.instance_id", () -> "test-instance");
 
     registry.add("feast.core-authentication.options.oauth_url", () -> TOKEN_URL);
     registry.add("feast.core-authentication.options.grant_type", () -> GRANT_TYPE);

@@ -86,10 +86,24 @@
 
     <dependency>
       <groupId>dev.feast</groupId>
+      <artifactId>feast-storage-connector-bigtable</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>dev.feast</groupId>
       <artifactId>feast-common</artifactId>
       <version>${project.version}</version>
     </dependency>
-    
+
+    <dependency>
+      <groupId>com.google.cloud</groupId>
+      <artifactId>google-cloud-bigtable-emulator</artifactId>
+      <version>0.130.2</version>
+      <scope>test</scope>
+    </dependency>
+
+
     <!-- TODO: SLF4J is being used via Lombok, but also jog4j - pick one -->
     <dependency>
       <groupId>org.slf4j</groupId>
@@ -127,6 +141,14 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-test -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-test</artifactId>
+      <version>2.3.1.RELEASE</version>
+      <scope>test</scope>
     </dependency>
 
     <!--compile "io.grpc:grpc-services:${grpc.version}"-->
@@ -234,6 +256,13 @@
       <scope>test</scope>
     </dependency>
 
+    <!-- https://mvnrepository.com/artifact/org.apache.avro/avro -->
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <version>1.10.2</version>
+    </dependency>
+
     <!-- Utilities -->
     <dependency>
       <groupId>com.fasterxml.jackson.dataformat</groupId>
@@ -305,6 +334,12 @@
       <groupId>org.testcontainers</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>1.15.1</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>gcloud</artifactId>
+      <version>1.15.2</version>
       <scope>test</scope>
     </dependency>
     <dependency>
