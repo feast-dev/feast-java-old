@@ -17,7 +17,7 @@
 package feast.core.service;
 
 import static feast.core.validators.Matchers.checkValidCharacters;
-import static feast.core.validators.Matchers.checkValidCharactersAllowAsterisk;
+import static feast.core.validators.Matchers.checkValidCharactersAllowDash;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import feast.core.dao.EntityRepository;
@@ -105,7 +105,7 @@ public class SpecService {
       projectName = Project.DEFAULT_NAME;
     }
 
-    checkValidCharacters(projectName, "project");
+    checkValidCharactersAllowDash(projectName, "project");
     checkValidCharacters(entityName, "entity");
 
     EntityV2 entity = entityRepository.findEntityByNameAndProject_Name(entityName, projectName);
@@ -143,12 +143,12 @@ public class SpecService {
     List<String> entities = filter.getEntitiesList();
     Map<String, String> labels = filter.getLabelsMap();
 
-    checkValidCharactersAllowAsterisk(project, "project");
-
     // Autofill default project if project not specified
     if (project.isEmpty()) {
       project = Project.DEFAULT_NAME;
     }
+
+    checkValidCharactersAllowDash(project, "project");
 
     // Currently defaults to all FeatureTables
     List<FeatureTable> featureTables = tableRepository.findAllByProject_Name(project);
@@ -200,7 +200,7 @@ public class SpecService {
       project = Project.DEFAULT_NAME;
     }
 
-    checkValidCharacters(project, "project");
+    checkValidCharactersAllowDash(project, "project");
 
     List<EntityV2> entities = entityRepository.findAllByProject_Name(project);
 
@@ -270,6 +270,8 @@ public class SpecService {
     if (projectName == null || projectName.isEmpty()) {
       projectName = Project.DEFAULT_NAME;
     }
+
+    checkValidCharactersAllowDash(projectName, "project");
 
     // Validate incoming entity
     EntityValidator.validateSpec(newEntitySpec);
@@ -368,6 +370,8 @@ public class SpecService {
   public ApplyFeatureTableResponse applyFeatureTable(ApplyFeatureTableRequest request) {
     String projectName = resolveProjectName(request.getProject());
 
+    checkValidCharactersAllowDash(projectName, "project");
+
     // Check that specification provided is valid
     FeatureTableSpec applySpec = request.getTableSpec();
     FeatureTableValidator.validateSpec(applySpec);
@@ -411,7 +415,7 @@ public class SpecService {
     String projectName = resolveProjectName(filter.getProject());
     Map<String, String> labelsFilter = filter.getLabelsMap();
 
-    checkValidCharacters(projectName, "project");
+    checkValidCharactersAllowDash(projectName, "project");
 
     List<FeatureTable> matchingTables = tableRepository.findAllByProject_Name(projectName);
 
@@ -444,7 +448,7 @@ public class SpecService {
     String projectName = resolveProjectName(request.getProject());
     String featureTableName = request.getName();
 
-    checkValidCharacters(projectName, "project");
+    checkValidCharactersAllowDash(projectName, "project");
     checkValidCharacters(featureTableName, "featureTable");
 
     Optional<FeatureTable> retrieveTable =
@@ -474,7 +478,7 @@ public class SpecService {
     String projectName = resolveProjectName(request.getProject());
     String featureTableName = request.getName();
 
-    checkValidCharacters(projectName, "project");
+    checkValidCharactersAllowDash(projectName, "project");
     checkValidCharacters(featureTableName, "featureTable");
 
     Optional<FeatureTable> existingTable =
