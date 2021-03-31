@@ -119,6 +119,7 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
               try {
                 featureValue = record.get(featureReference.getName());
               } catch (AvroRuntimeException e) {
+                // Feature is not found in schema
                 return null;
               }
               if (featureValue != null) {
@@ -127,7 +128,10 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
                     Timestamp.newBuilder().setSeconds(timestamp / 1000).build(),
                     featureValue);
               }
-              return null;
+              return new NativeFeature(
+                  featureReference,
+                  Timestamp.newBuilder().setSeconds(timestamp / 1000).build(),
+                  new Object());
             })
         .filter(Objects::nonNull)
         .collect(Collectors.toList());

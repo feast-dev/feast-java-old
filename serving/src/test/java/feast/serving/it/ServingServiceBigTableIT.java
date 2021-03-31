@@ -563,7 +563,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
             ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
             FeatureV2.getFeatureStringRef(emptyFeatureReference),
-            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
+            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NULL_VALUE);
 
     ServingAPIProto.GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
         ServingAPIProto.GetOnlineFeaturesResponse.FieldValues.newBuilder()
