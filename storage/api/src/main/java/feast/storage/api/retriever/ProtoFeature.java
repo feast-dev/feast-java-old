@@ -36,6 +36,12 @@ public class ProtoFeature implements Feature {
     this.featureValue = featureValue;
   }
 
+  /**
+   * Returns Feast valueType if type matches, otherwise null.
+   *
+   * @param valueType Feast valueType of feature as specified in FeatureSpec
+   * @return ValueProto.Value representation of feature
+   */
   @Override
   public ValueProto.Value getFeatureValue(ValueProto.ValueType.Enum valueType) {
     if (TYPE_TO_VAL_CASE.get(valueType) != this.featureValue.getValCase()) {

@@ -37,6 +37,13 @@ public class NativeFeature implements Feature {
     this.featureValue = featureValue;
   }
 
+  /**
+   * Casts feature value of Object type based on Feast valueType. Empty object i.e new Object() is
+   * interpreted as VAL_NOT_SET Feast valueType.
+   *
+   * @param valueType Feast valueType of feature as specified in FeatureSpec
+   * @return ValueProto.Value representation of feature
+   */
   @Override
   public ValueProto.Value getFeatureValue(ValueProto.ValueType.Enum valueType) {
     ValueProto.Value finalValue;

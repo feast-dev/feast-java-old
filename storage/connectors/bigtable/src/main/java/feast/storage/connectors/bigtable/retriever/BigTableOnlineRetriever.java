@@ -49,6 +49,13 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
     this.schemaRegistry = new BigTableSchemaRegistry(client);
   }
 
+  /**
+   * Generate name of BigTable table in the form of <feastProject>__<entityNames>
+   *
+   * @param project Name of Feast project
+   * @param entityNames List of entities used in retrieval call
+   * @return Name of BigTable table
+   */
   private String getTableName(String project, List<String> entityNames) {
     String tableName =
         String.format("%s__%s", project, entityNames.stream().collect(Collectors.joining("__")));
@@ -56,6 +63,13 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
     return tableName;
   }
 
+  /**
+   * Convert Entity value from Feast valueType to String type. Currently only supports STRING_VAL,
+   * INT64_VAL, INT32_VAL and BYTES_VAL.
+   *
+   * @param v Entity value of Feast valueType
+   * @return String representation of Entity value
+   */
   private String valueToString(ValueProto.Value v) {
     String stringRepr;
     switch (v.getValCase()) {
@@ -78,6 +92,13 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
     return stringRepr;
   }
 
+  /**
+   * Generate BigTable key in the form of entity values joined by #.
+   *
+   * @param entityRow Single EntityRow representation in feature retrieval call
+   * @param entityNames List of entities related to feature references in retrieval call
+   * @return BigTable key for retrieval
+   */
   private ByteString convertEntityValueToBigTableKey(
       EntityRow entityRow, List<String> entityNames) {
     return ByteString.copyFrom(
@@ -88,12 +109,30 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
             .getBytes());
   }
 
+  /**
+   * Retrieve BigTable table column families based on FeatureTable names.
+   *
+   * @param featureReferences List of feature references of features in retrieval call
+   * @return List of String of FeatureTable names
+   */
   private List<String> getColumnFamilies(List<FeatureReferenceV2> featureReferences) {
     return featureReferences.stream()
         .map(FeatureReferenceV2::getFeatureTable)
         .collect(Collectors.toList());
   }
 
+  /**
+   * AvroRuntimeException is thrown if feature name does not exist in avro schema. Empty Object is
+   * returned when null is retrieved from BigTable RowCell.
+   *
+   * @param tableName Name of BigTable table
+   * @param value Value of BigTable cell where first 4 bytes represent the schema reference and
+   *     remaining bytes represent avro-serialized features
+   * @param featureReferences List of feature references
+   * @param timestamp Timestamp of rowCell
+   * @return @NativeFeature with retrieved value stored in BigTable RowCell
+   * @throws IOException
+   */
   private List<Feature> decodeFeatures(
       String tableName,
       ByteString value,
@@ -158,6 +197,15 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
     return features;
   }
 
+  /**
+   * Retrieve rows for each row entity key by generating BigTable rowQuery with filters based on
+   * column families.
+   *
+   * @param tableName Name of BigTable table
+   * @param rowKeys List of keys of rows to retrieve
+   * @param columnFamilies List of FeatureTable names
+   * @return Map of retrieved features for each rowKey
+   */
   private Map<ByteString, Row> getFeaturesFromBigTable(
       String tableName, List<ByteString> rowKeys, List<String> columnFamilies) {
 
@@ -173,6 +221,15 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
         .collect(Collectors.toMap(Row::getKey, Function.identity()));
   }
 
+  /**
+   * Converts rowCell feature value into @NativeFeature type.
+   *
+   * @param tableName Name of BigTable table
+   * @param rowKeys List of keys of rows to retrieve
+   * @param rows Map of rowKey to Row related to it
+   * @param featureReferences List of feature references
+   * @return List of List of Features associated with respective rowKey
+   */
   private List<List<Feature>> convertRowToFeature(
       String tableName,
       List<ByteString> rowKeys,
