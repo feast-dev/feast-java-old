@@ -19,28 +19,11 @@ This repository contains the following Feast components.
 * Feast Serving has a dependency on Feast Core.
 * The Go and Python Clients are not a part of this repository.
 
-### Running tests
-
-To run unit tests:
-
-```
-make test-java
-```
-
-To run integration tests:
-
-```
-make test-java-integration
-```
-
-### Building docker images
-
-In order to build development versions of the Core and Serving images, please run the following commands:
-
-```
-build-docker REGISTRY=gcr.io/kf-feast VERSION=develop
-```
+### Contributing
+Guides on Contributing:
+- [Contribution Process for Feast](https://docs.feast.dev/v/master/contributing/contributing)
+- [Development Guide for Feast](https://docs.feast.dev/contributing/development-guide)
+- [Development Guide for feast-java (this repository)](./CONTRIBUTING.md)
 
 ### Installing using Helm
-
 Please see the Helm charts in [charts](infra/charts).
