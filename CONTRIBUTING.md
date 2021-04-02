@@ -9,7 +9,7 @@ the feast-java Repository:
 - [Feast Serving](#feast-serving)
 - [Feast Java Client](#feast-java-client)
 
-> Don't see the Feast Component that you want to contribute to here?  
+> Don't see the Feast component that you want to contribute to here?  
 > Check out the [Development Guide](https://docs.feast.dev/contributing/development-guide)
 > to learn how Feast components are distributed over multiple repositories.
 
@@ -24,12 +24,12 @@ git submodule update --recursive
 - Java SE Development Kit 11, Maven 3.6, `make`
 
 #### Code Style
-feast-java's Java codebase conforms to the [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html).
+feast-java's codebase conforms to the [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html).
 
 Automatically format the code to conform the style guide by:
 
 ```sh
-# formats all java code in the feast-java repository
+# formats all code in the feast-java repository
 mvn spotless:apply
 ```
 
@@ -58,7 +58,7 @@ make build-docker REGISTRY=gcr.io/kf-feast VERSION=develop
 
 ## Feast Core
 ### Environment Setup
-Setting up your Development Environment for Feast Core:
+Setting up your development environment for Feast Core:
 1. Complete the feast-java [Common Setup](#common-setup)
 2. Boot up a PostgreSQL instance (version 11 and above). Example of doing so via Docker:
 ```sh
@@ -98,7 +98,7 @@ mvn verify -pl core --also-make
 
 ## Feast Serving
 ### Environment Setup
-Setting up your Development Environment for Feast Serving:
+Setting up your development environment for Feast Serving:
 1. Complete the feast-java [Common Setup](#common-setup)
 2. Boot up a Redis instance (version 5.x). Example of doing so via Docker:
 ```sh
@@ -134,14 +134,14 @@ mvn verify -pl serving --also-make
 
 ## Feast Java Client
 ### Environment Setup
-Setting up your Development Environment for Feast Java SDK:
+Setting up your development environment for Feast Java SDK:
 1. Complete the feast-java [Common Setup](#common-setup)
 
 > Feast Java Client is a Java Client for retrieving Features from a running Feast Serving instance.  
 > See the [Feast Serving Section](#feast-serving) section for how to get a Feast Serving instance running.
 
 ### Configuration
-Feast Java Client is [configured using Java code](https://docs.feast.dev/v/master/reference/configuration-reference#4-feast-java-and-go-sdk)
+Feast Java Client is [configured as code](https://docs.feast.dev/v/master/reference/configuration-reference#4-feast-java-and-go-sdk)
 
 ### Building
 1. Build / Compile Feast Java Client with Maven:
