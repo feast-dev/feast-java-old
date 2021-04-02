@@ -23,7 +23,7 @@ This repository contains the following Feast components.
 Guides on Contributing:
 - [Contribution Process for Feast](https://docs.feast.dev/v/master/contributing/contributing)
 - [Development Guide for Feast](https://docs.feast.dev/contributing/development-guide)
-- [Development Guide for feast-java](./CONTRIBUTING.md)
+- [Development Guide for feast-java (this repository)](./CONTRIBUTING.md)
 
 ### Installing using Helm
 Please see the Helm charts in [charts](infra/charts).
