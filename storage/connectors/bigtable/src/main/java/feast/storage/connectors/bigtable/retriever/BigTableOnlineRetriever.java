@@ -20,6 +20,7 @@ import com.google.cloud.bigtable.data.v2.BigtableDataClient;
 import com.google.cloud.bigtable.data.v2.models.Filters;
 import com.google.cloud.bigtable.data.v2.models.Query;
 import com.google.cloud.bigtable.data.v2.models.Row;
+import com.google.cloud.bigtable.data.v2.models.RowCell;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Timestamp;
 import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
@@ -242,9 +243,15 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
               if (!rows.containsKey(rowKey)) {
                 return Collections.<Feature>emptyList();
               } else {
-                return rows.get(rowKey).getCells().stream()
+                Row row = rows.get(rowKey);
+                return featureReferences.stream()
+                    .map(FeatureReferenceV2::getFeatureTable)
+                    .distinct()
+                    .map(cf -> row.getCells(cf, ""))
+                    .filter(ls -> !ls.isEmpty())
                     .flatMap(
-                        rowCell -> {
+                        rowCells -> {
+                          RowCell rowCell = rowCells.get(0); // Latest cell
                           String family = rowCell.getFamily();
                           ByteString value = rowCell.getValue();
 

@@ -218,7 +218,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
         SchemaBuilder.record("DriverData")
             .namespace(featureTableName)
             .fields()
-            .requiredInt(feature1Reference.getName())
+            .requiredLong(feature1Reference.getName())
             .requiredDouble(feature2Reference.getName())
             .nullableString(feature3Reference.getName(), "null")
             .requiredString(feature4Reference.getName())
@@ -228,7 +228,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
 
     GenericRecord record =
         new GenericRecordBuilder(ftSchema)
-            .set("trip_cost", 5)
+            .set("trip_cost", 5L)
             .set("trip_distance", 3.5)
             .set("trip_empty", null)
             .set("trip_wrong_type", "test")
@@ -245,7 +245,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
         SchemaBuilder.record("DriverMerchantData")
             .namespace(rideMerchantFeatureTableName)
             .fields()
-            .requiredInt(feature1Reference.getName())
+            .requiredLong(feature1Reference.getName())
             .requiredDouble(feature2Reference.getName())
             .nullableString(feature3Reference.getName(), "null")
             .requiredString(feature4Reference.getName())
@@ -256,7 +256,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     // Entity-Feature Row
     GenericRecord compoundEntityRecord =
         new GenericRecordBuilder(compoundFtSchema)
-            .set("trip_cost", 10)
+            .set("trip_cost", 10L)
             .set("trip_distance", 5.5)
             .set("trip_empty", null)
             .set("trip_wrong_type", "wrong_type")

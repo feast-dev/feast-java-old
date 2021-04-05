@@ -58,13 +58,13 @@ public class NativeFeature implements Feature {
           finalValue = ValueProto.Value.newBuilder().setInt32Val((Integer) featureValue).build();
           break;
         case INT64:
-          finalValue = ValueProto.Value.newBuilder().setInt64Val((Integer) featureValue).build();
+          finalValue = ValueProto.Value.newBuilder().setInt64Val((Long) featureValue).build();
           break;
         case DOUBLE:
           finalValue = ValueProto.Value.newBuilder().setDoubleVal((Double) featureValue).build();
           break;
         case FLOAT:
-          finalValue = ValueProto.Value.newBuilder().setFloatVal((Long) featureValue).build();
+          finalValue = ValueProto.Value.newBuilder().setFloatVal((Float) featureValue).build();
           break;
         case BYTES:
           finalValue = ValueProto.Value.newBuilder().setBytesVal((ByteString) featureValue).build();
