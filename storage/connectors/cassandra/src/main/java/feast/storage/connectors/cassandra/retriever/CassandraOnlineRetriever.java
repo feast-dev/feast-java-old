@@ -17,20 +17,32 @@
 package feast.storage.connectors.cassandra.retriever;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
-import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
 import com.datastax.oss.driver.api.querybuilder.select.Selector;
-import com.google.protobuf.ByteString;
+import com.google.protobuf.Timestamp;
 import feast.proto.serving.ServingAPIProto;
 import feast.proto.types.ValueProto;
 import feast.storage.api.retriever.Feature;
+import feast.storage.api.retriever.NativeFeature;
 import feast.storage.api.retriever.OnlineRetrieverV2;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+import org.apache.avro.AvroRuntimeException;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.Decoder;
+import org.apache.avro.io.DecoderFactory;
 
 public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
 
@@ -38,6 +50,8 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
   private CassandraSchemaRegistry schemaRegistry;
 
   private static String ENTITY_KEY = "key";
+  private static String SCHEMA_REF_KEY = "schema_ref";
+  private static String TIMESTAMP_COLUMN = String.format("writetime(%s)", SCHEMA_REF_KEY);
 
   public CassandraOnlineRetriever(CqlSession session) {
     this.session = session;
@@ -94,9 +108,9 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
    * @param entityNames List of entities related to feature references in retrieval call
    * @return Cassandra key for retrieval
    */
-  private ByteString convertEntityValueToCassandraKey(
+  private ByteBuffer convertEntityValueToCassandraKey(
       ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow entityRow, List<String> entityNames) {
-    return ByteString.copyFrom(
+    return ByteBuffer.wrap(
         entityNames.stream()
             .map(entity -> entityRow.getFieldsMap().get(entity))
             .map(this::valueToString)
@@ -105,7 +119,7 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
   }
 
   /**
-   * Retrieve BigTable table column families based on FeatureTable names.
+   * Retrieve Cassandra table column families based on FeatureTable names.
    *
    * @param featureReferences List of feature references of features in retrieval call
    * @return List of String of FeatureTable names
@@ -114,6 +128,46 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
       List<ServingAPIProto.FeatureReferenceV2> featureReferences) {
     return featureReferences.stream()
         .map(ServingAPIProto.FeatureReferenceV2::getFeatureTable)
+        .collect(Collectors.toList());
+  }
+
+  private List<Feature> decodeFeatures(
+      ByteBuffer schemaRefKey,
+      ByteBuffer value,
+      List<ServingAPIProto.FeatureReferenceV2> featureReferences,
+      long timestamp)
+      throws IOException {
+
+    CassandraSchemaRegistry.SchemaReference schemaReference =
+        new CassandraSchemaRegistry.SchemaReference(schemaRefKey);
+
+    Schema schema = schemaRegistry.getSchema(schemaReference);
+    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
+    Decoder decoder = DecoderFactory.get().binaryDecoder(value.array(), null);
+    GenericRecord record = reader.read(null, decoder);
+
+    return featureReferences.stream()
+        .map(
+            featureReference -> {
+              Object featureValue;
+              try {
+                featureValue = record.get(featureReference.getName());
+              } catch (AvroRuntimeException e) {
+                // Feature is not found in schema
+                return null;
+              }
+              if (featureValue != null) {
+                return new NativeFeature(
+                    featureReference,
+                    Timestamp.newBuilder().setSeconds(timestamp / 1000).build(),
+                    featureValue);
+              }
+              return new NativeFeature(
+                  featureReference,
+                  Timestamp.newBuilder().setSeconds(timestamp / 1000).build(),
+                  new Object());
+            })
+        .filter(Objects::nonNull)
         .collect(Collectors.toList());
   }
 
@@ -126,15 +180,18 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
 
     List<String> columnFamilies = getColumnFamilies(featureReferences);
     String tableName = getTableName(project, entityNames);
-    List<ByteString> rowKeys =
+
+    List<ByteBuffer> rowKeys =
         entityRows.stream()
             .map(row -> convertEntityValueToCassandraKey(row, entityNames))
             .collect(Collectors.toList());
 
-    Map<ByteString, Row> rowsFromCassandra =
+    Map<ByteBuffer, Row> rowsFromCassandra =
         getFeaturesFromCassandra(tableName, rowKeys, columnFamilies);
+    List<List<Feature>> features =
+        convertRowToFeature(rowKeys, rowsFromCassandra, featureReferences, columnFamilies);
 
-    return Collections.emptyList();
+    return features;
   }
 
   /**
@@ -146,19 +203,71 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
    * @param columnFamilies List of FeatureTable names
    * @return Map of retrieved features for each rowKey
    */
-  private Map<ByteString, Row> getFeaturesFromCassandra(
-      String tableName, List<ByteString> rowKeys, List<String> columnFamilies) {
+  private Map<ByteBuffer, Row> getFeaturesFromCassandra(
+      String tableName, List<ByteBuffer> rowKeys, List<String> columnFamilies) {
+    // Specify columns to retrieve
     List<Selector> selectors =
-        columnFamilies.stream().map(cf -> Selector.column(cf)).collect(Collectors.toList());
+        columnFamilies.stream()
+            .map(cf -> Selector.column(cf))
+            .distinct()
+            .collect(Collectors.toList());
+    selectors.add(Selector.column(ENTITY_KEY));
+    selectors.add(Selector.column(SCHEMA_REF_KEY));
+    selectors.add(Selector.writeTime(SCHEMA_REF_KEY));
 
     Select query =
-        QueryBuilder.selectFrom(tableName)
+        QueryBuilder.selectFrom(String.format("\"%s\"", tableName))
             .listOf(selectors)
             .whereColumn(ENTITY_KEY)
             .in(QueryBuilder.bindMarker());
 
-    SimpleStatement statement = query.build();
+    BoundStatement statement = session.prepare(query.build()).bind(rowKeys);
 
-    return Collections.emptyMap();
+    return StreamSupport.stream(session.execute(statement).spliterator(), false)
+        .collect(Collectors.toMap((Row row) -> row.getByteBuffer(ENTITY_KEY), Function.identity()));
+  }
+
+  /**
+   * Converts rowCell feature value into @NativeFeature type.
+   *
+   * @param rowKeys List of keys of rows to retrieve
+   * @param rows Map of rowKey to Row related to it
+   * @param featureReferences List of feature references
+   * @return List of List of Features associated with respective rowKey
+   */
+  private List<List<Feature>> convertRowToFeature(
+      List<ByteBuffer> rowKeys,
+      Map<ByteBuffer, Row> rows,
+      List<ServingAPIProto.FeatureReferenceV2> featureReferences,
+      List<String> columnFamilies) {
+
+    return rowKeys.stream()
+        .map(
+            rowKey -> {
+              if (!rows.containsKey(rowKey)) {
+                return Collections.<Feature>emptyList();
+              } else {
+                Row row = rows.get(rowKey);
+
+                String featureTableColumn = columnFamilies.get(0);
+                ByteBuffer schemaRefKey = row.getByteBuffer(SCHEMA_REF_KEY);
+                ByteBuffer featureValues = row.getByteBuffer(featureTableColumn);
+
+                List<Feature> features;
+                try {
+                  features =
+                      decodeFeatures(
+                          schemaRefKey,
+                          featureValues,
+                          featureReferences,
+                          row.getLong(TIMESTAMP_COLUMN));
+                } catch (IOException e) {
+                  throw new RuntimeException("Failed to decode features from Cassandra");
+                }
+
+                return features.stream().collect(Collectors.toList());
+              }
+            })
+        .collect(Collectors.toList());
   }
 }

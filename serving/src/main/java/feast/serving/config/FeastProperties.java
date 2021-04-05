@@ -321,7 +321,8 @@ public class FeastProperties {
       return new CassandraStoreConfig(
           this.config.get("host"),
           Integer.valueOf(this.config.get("port")),
-          this.config.get("data_center"));
+          this.config.get("data_center"),
+          this.config.get("keyspace"));
     }
 
     /**

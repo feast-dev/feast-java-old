@@ -87,11 +87,13 @@ public class ServingServiceConfigV2 {
         String host = config.getHost();
         Integer port = config.getPort();
         String dataCenter = config.getDataCenter();
+        String keySpace = config.getKeySpace();
 
         CqlSession session =
             new CqlSessionBuilder()
                 .addContactPoint(new InetSocketAddress(host, port))
                 .withLocalDatacenter(dataCenter)
+                .withKeyspace(keySpace)
                 .build();
         OnlineRetrieverV2 cassandraRetriever = new CassandraOnlineRetriever(session);
         servingService = new OnlineServingServiceV2(cassandraRetriever, specService, tracer);

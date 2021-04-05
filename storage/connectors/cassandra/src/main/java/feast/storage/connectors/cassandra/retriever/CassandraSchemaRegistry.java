@@ -17,12 +17,13 @@
 package feast.storage.connectors.cassandra.retriever;
 
 import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.cql.ResultSet;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
+import com.datastax.oss.driver.api.querybuilder.select.Select;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.protobuf.ByteString;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
@@ -32,22 +33,18 @@ public class CassandraSchemaRegistry {
   private final LoadingCache<SchemaReference, Schema> cache;
 
   private static String KEYSPACE = "feast";
+  private static String SCHEMA_REF_TABLE = "feast_schema_reference";
+  private static String SCHEMA_REF_COLUMN = "schema_ref";
   private static String SCHEMA_COLUMN = "avro_schema";
 
   public static class SchemaReference {
-    private final String tableName;
-    private final ByteString schemaHash;
+    private final ByteBuffer schemaHash;
 
-    public SchemaReference(String tableName, ByteString schemaHash) {
-      this.tableName = tableName;
+    public SchemaReference(ByteBuffer schemaHash) {
       this.schemaHash = schemaHash;
     }
 
-    public String getTableName() {
-      return tableName;
-    }
-
-    public ByteString getSchemaHash() {
+    public ByteBuffer getSchemaHash() {
       return schemaHash;
     }
   }
@@ -71,15 +68,16 @@ public class CassandraSchemaRegistry {
   }
 
   private Schema loadSchema(SchemaReference reference) {
-    ResultSet rs =
-        session.execute(
-            String.format(
-                "SELECT %s FROM %s.%s WHERE schema_ref = '%s'",
-                SCHEMA_COLUMN,
-                KEYSPACE,
-                reference.getTableName(),
-                ByteBuffer.wrap(reference.getSchemaHash().toByteArray())));
-    Row row = rs.one();
+    String tableName = String.format("%s.%s", KEYSPACE, SCHEMA_REF_TABLE);
+    Select query =
+        QueryBuilder.selectFrom(tableName)
+            .column(SCHEMA_COLUMN)
+            .whereColumn(SCHEMA_REF_COLUMN)
+            .in(QueryBuilder.bindMarker());
+
+    BoundStatement statement = session.prepare(query.build()).bind(reference.getSchemaHash());
+
+    Row row = session.execute(statement).one();
 
     return new Schema.Parser().parse(row.getTupleValue(SCHEMA_COLUMN).toString());
   }

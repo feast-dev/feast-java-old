@@ -21,11 +21,13 @@ public class CassandraStoreConfig {
   private final String host;
   private final Integer port;
   private final String dataCenter;
+  private final String keySpace;
 
-  public CassandraStoreConfig(String host, Integer port, String dataCenter) {
+  public CassandraStoreConfig(String host, Integer port, String dataCenter, String keySpace) {
     this.host = host;
     this.port = port;
     this.dataCenter = dataCenter;
+    this.keySpace = keySpace;
   }
 
   public String getHost() {
@@ -38,5 +40,9 @@ public class CassandraStoreConfig {
 
   public String getDataCenter() {
     return this.dataCenter;
+  }
+
+  public String getKeySpace() {
+    return this.keySpace;
   }
 }
