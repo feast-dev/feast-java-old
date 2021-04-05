@@ -17,6 +17,7 @@
     <modules>
         <module>redis</module>
         <module>bigtable</module>
+        <module>cassandra</module>
     </modules>
 
     <build>

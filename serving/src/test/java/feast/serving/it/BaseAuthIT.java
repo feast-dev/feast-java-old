@@ -54,6 +54,10 @@ public class BaseAuthIT {
   static final String BIGTABLE = "bigtable_1";
   static final int BIGTABLE_PORT = 8086;
 
+  static final String CASSANDRA = "cassandra_1";
+  static final int CASSANDRA_PORT = 9042;
+  static final String CASSANDRA_DATACENTER = "datacenter1";
+
   static final int FEAST_CORE_PORT = 6565;
 
   @DynamicPropertySource
@@ -79,6 +83,21 @@ public class BaseAuthIT {
     registry.add("feast.stores[1].type", () -> "BIGTABLE");
     registry.add("feast.stores[1].config.project_id", () -> "test-project");
     registry.add("feast.stores[1].config.instance_id", () -> "test-instance");
+
+    registry.add("feast.stores[2].name", () -> "cassandra");
+    registry.add("feast.stores[2].type", () -> "CASSANDRA");
+    registry.add(
+        "feast.stores[2].config.host",
+        () -> {
+          try {
+            return InetAddress.getLocalHost().getHostAddress();
+          } catch (UnknownHostException e) {
+            e.printStackTrace();
+            return "";
+          }
+        });
+    registry.add("feast.stores[2].config.port", () -> CASSANDRA_PORT);
+    registry.add("feast.stores[2].config.data_center", () -> CASSANDRA_DATACENTER);
 
     registry.add("feast.core-authentication.options.oauth_url", () -> TOKEN_URL);
     registry.add("feast.core-authentication.options.grant_type", () -> GRANT_TYPE);

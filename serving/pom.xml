@@ -92,6 +92,12 @@
 
     <dependency>
       <groupId>dev.feast</groupId>
+      <artifactId>feast-storage-connector-cassandra</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>dev.feast</groupId>
       <artifactId>feast-common</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -339,6 +345,12 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>gcloud</artifactId>
+      <version>1.15.2</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>cassandra</artifactId>
       <version>1.15.2</version>
       <scope>test</scope>
     </dependency>

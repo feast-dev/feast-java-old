@@ -59,6 +59,12 @@ feast:
       config:
         project_id: <gcp_project>
         instance_id: <gcp_bigtable_instance>
+    - name: cassandra
+      type: CASSANDRA
+      config:
+        host: localhost
+        port: 9094
+        data_center: datacenter1
   tracing:
     # If true, Feast will provide tracing data (using OpenTracing API) for various RPC method calls
     # which can be useful to debug performance issues and perform benchmarking
