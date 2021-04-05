@@ -25,6 +25,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
 
@@ -32,7 +33,6 @@ public class CassandraSchemaRegistry {
   private final CqlSession session;
   private final LoadingCache<SchemaReference, Schema> cache;
 
-  private static String KEYSPACE = "feast";
   private static String SCHEMA_REF_TABLE = "feast_schema_reference";
   private static String SCHEMA_REF_COLUMN = "schema_ref";
   private static String SCHEMA_COLUMN = "avro_schema";
@@ -68,17 +68,18 @@ public class CassandraSchemaRegistry {
   }
 
   private Schema loadSchema(SchemaReference reference) {
-    String tableName = String.format("%s.%s", KEYSPACE, SCHEMA_REF_TABLE);
+    String tableName = String.format("\"%s\"", SCHEMA_REF_TABLE);
     Select query =
         QueryBuilder.selectFrom(tableName)
             .column(SCHEMA_COLUMN)
             .whereColumn(SCHEMA_REF_COLUMN)
-            .in(QueryBuilder.bindMarker());
+            .isEqualTo(QueryBuilder.bindMarker());
 
     BoundStatement statement = session.prepare(query.build()).bind(reference.getSchemaHash());
 
     Row row = session.execute(statement).one();
 
-    return new Schema.Parser().parse(row.getTupleValue(SCHEMA_COLUMN).toString());
+    return new Schema.Parser()
+        .parse(StandardCharsets.UTF_8.decode(row.getByteBuffer(SCHEMA_COLUMN)).toString());
   }
 }

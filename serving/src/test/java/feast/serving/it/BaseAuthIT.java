@@ -58,6 +58,7 @@ public class BaseAuthIT {
   static final int CASSANDRA_PORT = 9042;
   static final String CASSANDRA_DATACENTER = "datacenter1";
   static final String CASSANDRA_KEYSPACE = "feast";
+  static final String CASSANDRA_SCHEMA_TABLE = "feast_schema_reference";
 
   static final int FEAST_CORE_PORT = 6565;
 

@@ -20,8 +20,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
-import com.datastax.oss.driver.api.querybuilder.select.Select;
-import com.datastax.oss.driver.api.querybuilder.select.Selector;
+import com.datastax.oss.driver.api.querybuilder.select.SelectFrom;
 import com.google.protobuf.Timestamp;
 import feast.proto.serving.ServingAPIProto;
 import feast.proto.types.ValueProto;
@@ -205,23 +204,20 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
    */
   private Map<ByteBuffer, Row> getFeaturesFromCassandra(
       String tableName, List<ByteBuffer> rowKeys, List<String> columnFamilies) {
-    // Specify columns to retrieve
-    List<Selector> selectors =
-        columnFamilies.stream()
-            .map(cf -> Selector.column(cf))
-            .distinct()
-            .collect(Collectors.toList());
-    selectors.add(Selector.column(ENTITY_KEY));
-    selectors.add(Selector.column(SCHEMA_REF_KEY));
-    selectors.add(Selector.writeTime(SCHEMA_REF_KEY));
+    SelectFrom query = QueryBuilder.selectFrom(String.format("\"%s\"", tableName));
 
-    Select query =
-        QueryBuilder.selectFrom(String.format("\"%s\"", tableName))
-            .listOf(selectors)
-            .whereColumn(ENTITY_KEY)
-            .in(QueryBuilder.bindMarker());
-
-    BoundStatement statement = session.prepare(query.build()).bind(rowKeys);
+    BoundStatement statement =
+        session
+            .prepare(
+                query
+                    .columns(columnFamilies)
+                    .column(SCHEMA_REF_KEY)
+                    .column(ENTITY_KEY)
+                    .writeTime(SCHEMA_REF_KEY)
+                    .whereColumn(ENTITY_KEY)
+                    .in(QueryBuilder.bindMarker())
+                    .build())
+            .bind(rowKeys);
 
     return StreamSupport.stream(session.execute(statement).spliterator(), false)
         .collect(Collectors.toMap((Row row) -> row.getByteBuffer(ENTITY_KEY), Function.identity()));

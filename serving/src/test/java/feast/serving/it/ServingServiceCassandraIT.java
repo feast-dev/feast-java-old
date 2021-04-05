@@ -170,7 +170,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
         ridesFeatures,
         7200);
 
-    // Cassandra Table names
+    /** Create Cassandra Tables Workflow */
     String cassandraTableName = String.format("%s__%s", projectName, driverEntityName);
     String compoundCassandraTableName =
         String.format(
@@ -184,15 +184,15 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
                 + "{'class':'SimpleStrategy','replication_factor':'1'};",
             CASSANDRA_KEYSPACE));
 
+    // Single Entity Cassandra Table
     cqlSession.execute(
         String.format(
-            "CREATE TABLE IF NOT EXISTS %s.%s (key BLOB, schema_ref BLOB, PRIMARY KEY (key));",
+            "CREATE TABLE %s.%s (key BLOB PRIMARY KEY, schema_ref BLOB);",
             CASSANDRA_KEYSPACE, cassandraTableName));
 
     // Add column families
     cqlSession.execute(
-        String.format(
-            "ALTER TABLE %s.%s ADD (rides BLOB)", CASSANDRA_KEYSPACE, cassandraTableName));
+        String.format("ALTER TABLE %s.%s ADD rides BLOB;", CASSANDRA_KEYSPACE, cassandraTableName));
 
     /** Single Entity Ingestion Workflow */
     Schema ftSchema =
@@ -229,6 +229,21 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             ByteBuffer.wrap(entityFeatureKey),
             ByteBuffer.wrap(schemaKey),
             ByteBuffer.wrap(entityFeatureValue)));
+
+    /** Schema Ingestion Workflow */
+    cqlSession.execute(
+        String.format(
+            "CREATE TABLE %s.%s (schema_ref BLOB PRIMARY KEY, avro_schema BLOB);",
+            CASSANDRA_KEYSPACE, CASSANDRA_SCHEMA_TABLE));
+
+    PreparedStatement schemaStatement =
+        cqlSession.prepare(
+            String.format(
+                "INSERT INTO %s.%s (schema_ref, avro_schema) VALUES (?, ?);",
+                CASSANDRA_KEYSPACE, CASSANDRA_SCHEMA_TABLE));
+    cqlSession.execute(
+        schemaStatement.bind(
+            ByteBuffer.wrap(schemaKey), ByteBuffer.wrap(ftSchema.toString().getBytes())));
 
     // set up options for call credentials
     options.put("oauth_url", TOKEN_URL);
