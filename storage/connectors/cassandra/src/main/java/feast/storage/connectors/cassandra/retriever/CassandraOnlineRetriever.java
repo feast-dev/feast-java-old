@@ -29,10 +29,7 @@ import feast.storage.api.retriever.NativeFeature;
 import feast.storage.api.retriever.OnlineRetrieverV2;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -50,7 +47,6 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
 
   private static String ENTITY_KEY = "key";
   private static String SCHEMA_REF_KEY = "schema_ref";
-  private static String TIMESTAMP_COLUMN = String.format("writetime(%s)", SCHEMA_REF_KEY);
 
   public CassandraOnlineRetriever(CqlSession session) {
     this.session = session;
@@ -140,9 +136,12 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
     CassandraSchemaRegistry.SchemaReference schemaReference =
         new CassandraSchemaRegistry.SchemaReference(schemaRefKey);
 
+    // Convert ByteBuffer to ByteArray
+    byte[] bytesArray = new byte[value.remaining()];
+    value.get(bytesArray, 0, bytesArray.length);
     Schema schema = schemaRegistry.getSchema(schemaReference);
     GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
-    Decoder decoder = DecoderFactory.get().binaryDecoder(value.array(), null);
+    Decoder decoder = DecoderFactory.get().binaryDecoder(bytesArray, null);
     GenericRecord record = reader.read(null, decoder);
 
     return featureReferences.stream()
@@ -205,15 +204,19 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
   private Map<ByteBuffer, Row> getFeaturesFromCassandra(
       String tableName, List<ByteBuffer> rowKeys, List<String> columnFamilies) {
     SelectFrom query = QueryBuilder.selectFrom(String.format("\"%s\"", tableName));
+    List<String> schemaRefKeyColumns =
+        columnFamilies.stream()
+            .map(cf -> String.format("%s__%s", cf, SCHEMA_REF_KEY))
+            .collect(Collectors.toList());
 
     BoundStatement statement =
         session
             .prepare(
                 query
                     .columns(columnFamilies)
-                    .column(SCHEMA_REF_KEY)
+                    .columns(schemaRefKeyColumns)
                     .column(ENTITY_KEY)
-                    .writeTime(SCHEMA_REF_KEY)
+                    .writeTime(schemaRefKeyColumns.get(0))
                     .whereColumn(ENTITY_KEY)
                     .in(QueryBuilder.bindMarker())
                     .build())
@@ -246,7 +249,11 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
                 Row row = rows.get(rowKey);
 
                 String featureTableColumn = columnFamilies.get(0);
-                ByteBuffer schemaRefKey = row.getByteBuffer(SCHEMA_REF_KEY);
+                String schemaRefKeyColumn =
+                    String.format("%s__%s", featureTableColumn, SCHEMA_REF_KEY);
+                String timestampColumn = String.format("writetime(%s)", schemaRefKeyColumn);
+
+                ByteBuffer schemaRefKey = row.getByteBuffer(schemaRefKeyColumn);
                 ByteBuffer featureValues = row.getByteBuffer(featureTableColumn);
 
                 List<Feature> features;
@@ -256,7 +263,7 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
                           schemaRefKey,
                           featureValues,
                           featureReferences,
-                          row.getLong(TIMESTAMP_COLUMN));
+                          row.getLong(timestampColumn));
                 } catch (IOException e) {
                   throw new RuntimeException("Failed to decode features from Cassandra");
                 }

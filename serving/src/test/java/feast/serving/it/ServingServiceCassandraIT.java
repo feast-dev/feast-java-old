@@ -31,6 +31,7 @@ import feast.proto.core.EntityProto;
 import feast.proto.serving.ServingAPIProto;
 import feast.proto.serving.ServingServiceGrpc;
 import feast.proto.types.ValueProto;
+import io.grpc.ManagedChannel;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -48,6 +49,7 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
 import org.junit.ClassRule;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -187,12 +189,13 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
     // Single Entity Cassandra Table
     cqlSession.execute(
         String.format(
-            "CREATE TABLE %s.%s (key BLOB PRIMARY KEY, schema_ref BLOB);",
-            CASSANDRA_KEYSPACE, cassandraTableName));
+            "CREATE TABLE %s.%s (key BLOB PRIMARY KEY);", CASSANDRA_KEYSPACE, cassandraTableName));
 
     // Add column families
     cqlSession.execute(
-        String.format("ALTER TABLE %s.%s ADD rides BLOB;", CASSANDRA_KEYSPACE, cassandraTableName));
+        String.format(
+            "ALTER TABLE %s.%s ADD (%s BLOB, %s__schema_ref BLOB);",
+            CASSANDRA_KEYSPACE, cassandraTableName, ridesFeatureTableName, ridesFeatureTableName));
 
     /** Single Entity Ingestion Workflow */
     Schema ftSchema =
@@ -216,14 +219,18 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             .build();
     byte[] entityFeatureKey =
         String.valueOf(DataGenerator.createInt64Value(1).getInt64Val()).getBytes();
-    byte[] entityFeatureValue = createEntityValue(ftSchema, schemaReference, record);
+    byte[] entityFeatureValue = createEntityValue(ftSchema, record);
     byte[] schemaKey = createSchemaKey(schemaReference);
 
     PreparedStatement statement =
         cqlSession.prepare(
             String.format(
-                "INSERT INTO %s.%s (key, schema_ref, rides) VALUES (?, ?, ?)",
-                CASSANDRA_KEYSPACE, cassandraTableName));
+                "INSERT INTO %s.%s (%s, %s__schema_ref, %s) VALUES (?, ?, ?)",
+                CASSANDRA_KEYSPACE,
+                cassandraTableName,
+                CASSANDRA_ENTITY_KEY,
+                ridesFeatureTableName,
+                ridesFeatureTableName));
     cqlSession.execute(
         statement.bind(
             ByteBuffer.wrap(entityFeatureKey),
@@ -262,14 +269,11 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
     return schemaKey;
   }
 
-  private static byte[] createEntityValue(
-      Schema schema, byte[] schemaReference, GenericRecord record) throws IOException {
+  private static byte[] createEntityValue(Schema schema, GenericRecord record) throws IOException {
     // Entity-Feature Row
     byte[] avroSerializedFeatures = recordToAvro(record, schema);
 
     ByteArrayOutputStream concatOutputStream = new ByteArrayOutputStream();
-    concatOutputStream.write(schemaReference);
-    concatOutputStream.write("".getBytes());
     concatOutputStream.write(avroSerializedFeatures);
     byte[] entityFeatureValue = concatOutputStream.toByteArray();
 
@@ -284,6 +288,11 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
     encoder.flush();
 
     return output.toByteArray();
+  }
+
+  @AfterAll
+  static void tearDown() {
+    ((ManagedChannel) servingStub.getChannel()).shutdown();
   }
 
   @Test
