@@ -20,7 +20,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
-import com.datastax.oss.driver.api.querybuilder.select.SelectFrom;
+import com.datastax.oss.driver.api.querybuilder.select.Select;
 import com.google.protobuf.Timestamp;
 import feast.proto.serving.ServingAPIProto;
 import feast.proto.types.ValueProto;
@@ -42,11 +42,12 @@ import org.apache.avro.io.DecoderFactory;
 
 public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
 
-  private CqlSession session;
-  private CassandraSchemaRegistry schemaRegistry;
+  private final CqlSession session;
+  private final CassandraSchemaRegistry schemaRegistry;
 
-  private static String ENTITY_KEY = "key";
-  private static String SCHEMA_REF_KEY = "schema_ref";
+  private static final String ENTITY_KEY = "key";
+  private static final String SCHEMA_REF_SUFFIX = "__schema_ref";
+  private static final String EVENT_TIMESTAMP_SUFFIX = "__event_timestamp";
 
   public CassandraOnlineRetriever(CqlSession session) {
     this.session = session;
@@ -61,10 +62,8 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
    * @return Name of Cassandra table
    */
   private String getTableName(String project, List<String> entityNames) {
-    String tableName =
-        String.format("%s__%s", project, entityNames.stream().collect(Collectors.joining("__")));
 
-    return tableName;
+    return String.format("%s__%s", project, String.join("__", entityNames));
   }
 
   /**
@@ -123,6 +122,7 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
       List<ServingAPIProto.FeatureReferenceV2> featureReferences) {
     return featureReferences.stream()
         .map(ServingAPIProto.FeatureReferenceV2::getFeatureTable)
+        .distinct()
         .collect(Collectors.toList());
   }
 
@@ -186,10 +186,8 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
 
     Map<ByteBuffer, Row> rowsFromCassandra =
         getFeaturesFromCassandra(tableName, rowKeys, columnFamilies);
-    List<List<Feature>> features =
-        convertRowToFeature(rowKeys, rowsFromCassandra, featureReferences, columnFamilies);
 
-    return features;
+    return convertRowToFeature(rowKeys, rowsFromCassandra, featureReferences, columnFamilies);
   }
 
   /**
@@ -198,29 +196,24 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
    *
    * @param tableName Name of Cassandra table
    * @param rowKeys List of keys of rows to retrieve
-   * @param columnFamilies List of FeatureTable names
+   * @param featureTables List of FeatureTable names
    * @return Map of retrieved features for each rowKey
    */
   private Map<ByteBuffer, Row> getFeaturesFromCassandra(
-      String tableName, List<ByteBuffer> rowKeys, List<String> columnFamilies) {
-    SelectFrom query = QueryBuilder.selectFrom(String.format("\"%s\"", tableName));
-    List<String> schemaRefKeyColumns =
-        columnFamilies.stream()
-            .map(cf -> String.format("%s__%s", cf, SCHEMA_REF_KEY))
-            .collect(Collectors.toList());
+      String tableName, List<ByteBuffer> rowKeys, List<String> featureTables) {
+    List<String> schemaRefColumns =
+        featureTables.stream().map(c -> c + SCHEMA_REF_SUFFIX).collect(Collectors.toList());
+    Select query =
+        QueryBuilder.selectFrom(tableName)
+            .columns(featureTables)
+            .columns(schemaRefColumns)
+            .column(ENTITY_KEY);
+    for (String featureTable : featureTables) {
+      query = query.writeTime(featureTable).as(featureTable + EVENT_TIMESTAMP_SUFFIX);
+    }
+    query = query.whereColumn(ENTITY_KEY).in(QueryBuilder.bindMarker());
 
-    BoundStatement statement =
-        session
-            .prepare(
-                query
-                    .columns(columnFamilies)
-                    .columns(schemaRefKeyColumns)
-                    .column(ENTITY_KEY)
-                    .writeTime(schemaRefKeyColumns.get(0))
-                    .whereColumn(ENTITY_KEY)
-                    .in(QueryBuilder.bindMarker())
-                    .build())
-            .bind(rowKeys);
+    BoundStatement statement = session.prepare(query.build()).bind(rowKeys);
 
     return StreamSupport.stream(session.execute(statement).spliterator(), false)
         .collect(Collectors.toMap((Row row) -> row.getByteBuffer(ENTITY_KEY), Function.identity()));
@@ -249,11 +242,7 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
                 Row row = rows.get(rowKey);
 
                 String featureTableColumn = columnFamilies.get(0);
-                String schemaRefKeyColumn =
-                    String.format("%s__%s", featureTableColumn, SCHEMA_REF_KEY);
-                String timestampColumn = String.format("writetime(%s)", schemaRefKeyColumn);
-
-                ByteBuffer schemaRefKey = row.getByteBuffer(schemaRefKeyColumn);
+                ByteBuffer schemaRefKey = row.getByteBuffer(featureTableColumn + SCHEMA_REF_SUFFIX);
                 ByteBuffer featureValues = row.getByteBuffer(featureTableColumn);
 
                 List<Feature> features;
@@ -263,12 +252,12 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
                           schemaRefKey,
                           featureValues,
                           featureReferences,
-                          row.getLong(timestampColumn));
+                          row.getLong(featureTableColumn + EVENT_TIMESTAMP_SUFFIX));
                 } catch (IOException e) {
                   throw new RuntimeException("Failed to decode features from Cassandra");
                 }
 
-                return features.stream().collect(Collectors.toList());
+                return new ArrayList<>(features);
               }
             })
         .collect(Collectors.toList());

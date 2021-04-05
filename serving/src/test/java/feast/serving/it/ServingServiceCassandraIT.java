@@ -40,7 +40,6 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -150,7 +149,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
     ImmutableMap<String, ValueProto.ValueType.Enum> ridesFeatures =
         ImmutableMap.of(
             "trip_cost",
-            ValueProto.ValueType.Enum.INT64,
+            ValueProto.ValueType.Enum.INT32,
             "trip_distance",
             ValueProto.ValueType.Enum.DOUBLE,
             "trip_empty",
@@ -175,9 +174,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
     /** Create Cassandra Tables Workflow */
     String cassandraTableName = String.format("%s__%s", projectName, driverEntityName);
     String compoundCassandraTableName =
-        String.format(
-            "%s__%s",
-            projectName, ridesMerchantEntities.stream().collect(Collectors.joining("__")));
+        String.format("%s__%s", projectName, String.join("__", ridesMerchantEntities));
 
     cqlSession.execute(String.format("DROP KEYSPACE IF EXISTS %s", CASSANDRA_KEYSPACE));
     cqlSession.execute(
@@ -327,7 +324,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             entityName,
             entityValue,
             FeatureV2.getFeatureStringRef(featureReference),
-            DataGenerator.createInt64Value(5),
+            DataGenerator.createInt32Value(5),
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
             DataGenerator.createEmptyValue());
 
