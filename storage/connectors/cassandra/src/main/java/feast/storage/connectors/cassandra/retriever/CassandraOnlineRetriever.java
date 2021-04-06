@@ -248,13 +248,23 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
                           ByteBuffer schemaRefKey =
                               row.getByteBuffer(featureTableColumn + SCHEMA_REF_SUFFIX);
 
+                          // Prevent retrieval of features from incorrect FeatureTable
+                          List<ServingAPIProto.FeatureReferenceV2> localFeatureReferences =
+                              featureReferences.stream()
+                                  .filter(
+                                      featureReference ->
+                                          featureReference
+                                              .getFeatureTable()
+                                              .equals(featureTableColumn))
+                                  .collect(Collectors.toList());
+
                           List<Feature> features;
                           try {
                             features =
                                 decodeFeatures(
                                     schemaRefKey,
                                     featureValues,
-                                    featureReferences,
+                                    localFeatureReferences,
                                     row.getLong(featureTableColumn + EVENT_TIMESTAMP_SUFFIX));
                           } catch (IOException e) {
                             throw new RuntimeException("Failed to decode features from Cassandra");
