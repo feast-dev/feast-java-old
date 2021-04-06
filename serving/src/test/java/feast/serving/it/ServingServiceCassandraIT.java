@@ -160,6 +160,18 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
     TestUtils.applyFeatureTable(
         coreClient, projectName, ridesFeatureTableName, ridesEntities, ridesFeatures, 7200);
 
+    // Apply FeatureTable (food)
+    String foodFeatureTableName = "food";
+    ImmutableList<String> foodEntities = ImmutableList.of(driverEntityName);
+    ImmutableMap<String, ValueProto.ValueType.Enum> foodFeatures =
+        ImmutableMap.of(
+            "trip_cost",
+            ValueProto.ValueType.Enum.INT32,
+            "trip_distance",
+            ValueProto.ValueType.Enum.DOUBLE);
+    TestUtils.applyFeatureTable(
+        coreClient, projectName, foodFeatureTableName, foodEntities, foodFeatures, 7200);
+
     // Apply FeatureTable (rides_merchant)
     String rideMerchantFeatureTableName = "rides_merchant";
     ImmutableList<String> ridesMerchantEntities =
@@ -190,6 +202,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
 
     // Add column families
     addCassandraTableColumn(cassandraTableName, ridesFeatureTableName);
+    addCassandraTableColumn(cassandraTableName, foodFeatureTableName);
     addCassandraTableColumn(compoundCassandraTableName, rideMerchantFeatureTableName);
 
     /** Single Entity Ingestion Workflow */
@@ -219,6 +232,33 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
 
     ingestData(
         ridesFeatureTableName, cassandraTableName, entityFeatureKey, entityFeatureValue, schemaKey);
+
+    Schema foodFtSchema =
+        SchemaBuilder.record("FoodDriverData")
+            .namespace(foodFeatureTableName)
+            .fields()
+            .requiredInt(feature1Reference.getName())
+            .requiredDouble(feature2Reference.getName())
+            .endRecord();
+    byte[] foodSchemaReference =
+        Hashing.murmur3_32().hashBytes(foodFtSchema.toString().getBytes()).asBytes();
+
+    GenericRecord foodRecord =
+        new GenericRecordBuilder(foodFtSchema)
+            .set("trip_cost", 12)
+            .set("trip_distance", 7.5)
+            .build();
+    byte[] foodEntityFeatureKey =
+        String.valueOf(DataGenerator.createInt64Value(1).getInt64Val()).getBytes();
+    byte[] foodEntityFeatureValue = createEntityValue(foodFtSchema, foodRecord);
+    byte[] foodSchemaKey = createSchemaKey(foodSchemaReference);
+
+    ingestData(
+        foodFeatureTableName,
+        cassandraTableName,
+        foodEntityFeatureKey,
+        foodEntityFeatureValue,
+        foodSchemaKey);
 
     /** Compound Entity Ingestion Workflow */
     Schema compoundFtSchema =
@@ -269,6 +309,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             CASSANDRA_KEYSPACE, CASSANDRA_SCHEMA_TABLE));
 
     ingestSchema(schemaKey, ftSchema);
+    ingestSchema(foodSchemaKey, foodFtSchema);
     ingestSchema(compoundSchemaKey, compoundFtSchema);
 
     // set up options for call credentials
@@ -571,6 +612,77 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             .build();
     ImmutableList<GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
         ImmutableList.of(expectedFieldValues, expectedFieldValues2);
+
+    assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
+  }
+
+  @Test
+  public void shouldReturnFeaturesFromDiffFeatureTable() {
+    String projectName = "default";
+    String entityName = "driver_id";
+    ValueProto.Value entityValue = DataGenerator.createInt64Value(1);
+
+    // Instantiate EntityRows
+    GetOnlineFeaturesRequestV2.EntityRow entityRow =
+        DataGenerator.createEntityRow(entityName, entityValue, 100);
+    ImmutableList<GetOnlineFeaturesRequestV2.EntityRow> entityRows = ImmutableList.of(entityRow);
+
+    // Instantiate FeatureReferences
+    FeatureReferenceV2 rideFeatureReference =
+        DataGenerator.createFeatureReference("rides", "trip_cost");
+    FeatureReferenceV2 rideFeatureReference2 =
+        DataGenerator.createFeatureReference("rides", "trip_distance");
+    FeatureReferenceV2 foodFeatureReference =
+        DataGenerator.createFeatureReference("food", "trip_cost");
+    FeatureReferenceV2 foodFeatureReference2 =
+        DataGenerator.createFeatureReference("food", "trip_distance");
+
+    ImmutableList<FeatureReferenceV2> featureReferences =
+        ImmutableList.of(
+            rideFeatureReference,
+            rideFeatureReference2,
+            foodFeatureReference,
+            foodFeatureReference2);
+
+    // Build GetOnlineFeaturesRequestV2
+    GetOnlineFeaturesRequestV2 onlineFeatureRequest =
+        TestUtils.createOnlineFeatureRequest(projectName, featureReferences, entityRows);
+    GetOnlineFeaturesResponse featureResponse =
+        servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
+
+    ImmutableMap<String, ValueProto.Value> expectedValueMap =
+        ImmutableMap.of(
+            entityName,
+            entityValue,
+            FeatureV2.getFeatureStringRef(rideFeatureReference),
+            DataGenerator.createInt32Value(5),
+            FeatureV2.getFeatureStringRef(rideFeatureReference2),
+            DataGenerator.createDoubleValue(3.5),
+            FeatureV2.getFeatureStringRef(foodFeatureReference),
+            DataGenerator.createInt32Value(12),
+            FeatureV2.getFeatureStringRef(foodFeatureReference2),
+            DataGenerator.createDoubleValue(7.5));
+
+    ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
+        ImmutableMap.of(
+            entityName,
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(rideFeatureReference),
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(rideFeatureReference2),
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(foodFeatureReference),
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(foodFeatureReference2),
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+
+    GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
+        GetOnlineFeaturesResponse.FieldValues.newBuilder()
+            .putAllFields(expectedValueMap)
+            .putAllStatuses(expectedStatusMap)
+            .build();
+    ImmutableList<GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
+        ImmutableList.of(expectedFieldValues);
 
     assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
   }
