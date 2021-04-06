@@ -79,8 +79,6 @@ public class BaseAuthIT {
           }
         });
     registry.add("feast.stores[0].config.port", () -> REDIS_PORT);
-    registry.add("feast.stores[0].subscriptions[0].name", () -> "*");
-    registry.add("feast.stores[0].subscriptions[0].project", () -> "*");
 
     registry.add("feast.stores[1].name", () -> "bigtable");
     registry.add("feast.stores[1].type", () -> "BIGTABLE");
@@ -99,7 +97,19 @@ public class BaseAuthIT {
             return "";
           }
         });
-    registry.add("feast.stores[2].config.port", () -> CASSANDRA_PORT);
+
+    registry.add(
+        "feast.stores[2].config.connection_string",
+        () -> {
+          String hostAddress = "";
+          try {
+            hostAddress = InetAddress.getLocalHost().getHostAddress();
+          } catch (UnknownHostException e) {
+            e.printStackTrace();
+          }
+
+          return String.format("%s:%s", hostAddress, CASSANDRA_PORT);
+        });
     registry.add("feast.stores[2].config.data_center", () -> CASSANDRA_DATACENTER);
     registry.add("feast.stores[2].config.keyspace", () -> CASSANDRA_KEYSPACE);
 

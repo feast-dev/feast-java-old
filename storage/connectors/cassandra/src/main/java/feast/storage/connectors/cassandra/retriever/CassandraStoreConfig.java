@@ -18,24 +18,18 @@ package feast.storage.connectors.cassandra.retriever;
 
 public class CassandraStoreConfig {
 
-  private final String host;
-  private final Integer port;
+  private final String connectionString;
   private final String dataCenter;
   private final String keySpace;
 
-  public CassandraStoreConfig(String host, Integer port, String dataCenter, String keySpace) {
-    this.host = host;
-    this.port = port;
+  public CassandraStoreConfig(String connectionString, String dataCenter, String keySpace) {
+    this.connectionString = connectionString;
     this.dataCenter = dataCenter;
     this.keySpace = keySpace;
   }
 
-  public String getHost() {
-    return this.host;
-  }
-
-  public Integer getPort() {
-    return this.port;
+  public String getConnectionString() {
+    return this.connectionString;
   }
 
   public String getDataCenter() {

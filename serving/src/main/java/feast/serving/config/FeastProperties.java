@@ -319,8 +319,7 @@ public class FeastProperties {
 
     public CassandraStoreConfig getCassandraConfig() {
       return new CassandraStoreConfig(
-          this.config.get("host"),
-          Integer.valueOf(this.config.get("port")),
+          this.config.get("connection_string"),
           this.config.get("data_center"),
           this.config.get("keyspace"));
     }

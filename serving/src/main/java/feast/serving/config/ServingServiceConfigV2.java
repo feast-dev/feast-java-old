@@ -32,6 +32,9 @@ import feast.storage.connectors.redis.retriever.*;
 import io.opentracing.Tracer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -84,14 +87,24 @@ public class ServingServiceConfigV2 {
         break;
       case CASSANDRA:
         CassandraStoreConfig config = feastProperties.getActiveStore().getCassandraConfig();
-        String host = config.getHost();
-        Integer port = config.getPort();
+        String connectionString = config.getConnectionString();
         String dataCenter = config.getDataCenter();
         String keySpace = config.getKeySpace();
 
+        List<InetSocketAddress> contactPoints =
+            Arrays.stream(connectionString.split(","))
+                .map(String::trim)
+                .map(cs -> cs.split(":"))
+                .map(
+                    hostPort -> {
+                      int port = hostPort.length > 1 ? Integer.parseInt(hostPort[1]) : 9042;
+                      return new InetSocketAddress(hostPort[0], port);
+                    })
+                .collect(Collectors.toList());
+
         CqlSession session =
             new CqlSessionBuilder()
-                .addContactPoint(new InetSocketAddress(host, port))
+                .addContactPoints(contactPoints)
                 .withLocalDatacenter(dataCenter)
                 .withKeyspace(keySpace)
                 .build();
