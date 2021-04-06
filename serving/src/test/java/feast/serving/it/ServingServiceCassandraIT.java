@@ -417,22 +417,161 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
   }
 
   @Test
-  public void shouldRegisterSingleEntityAndGetOnlineFeatures2() {
+  public void shouldRegisterCompoundEntityAndGetOnlineFeatures() {
+    String projectName = "default";
+    String driverEntityName = "driver_id";
+    String merchantEntityName = "merchant_id";
+    ValueProto.Value driverEntityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
+    ValueProto.Value merchantEntityValue = ValueProto.Value.newBuilder().setInt64Val(1234).build();
+
+    ImmutableMap<String, ValueProto.Value> compoundEntityMap =
+        ImmutableMap.of(
+            driverEntityName, driverEntityValue, merchantEntityName, merchantEntityValue);
+
+    // Instantiate EntityRows
+    GetOnlineFeaturesRequestV2.EntityRow entityRow =
+        DataGenerator.createCompoundEntityRow(compoundEntityMap, 100);
+    ImmutableList<GetOnlineFeaturesRequestV2.EntityRow> entityRows = ImmutableList.of(entityRow);
+
+    // Instantiate FeatureReferences
+    FeatureReferenceV2 featureReference =
+        DataGenerator.createFeatureReference("rides", "trip_cost");
+    FeatureReferenceV2 notFoundFeatureReference =
+        DataGenerator.createFeatureReference("rides", "trip_transaction");
+
+    ImmutableList<FeatureReferenceV2> featureReferences =
+        ImmutableList.of(featureReference, notFoundFeatureReference);
+
+    // Build GetOnlineFeaturesRequestV2
+    GetOnlineFeaturesRequestV2 onlineFeatureRequest =
+        TestUtils.createOnlineFeatureRequest(projectName, featureReferences, entityRows);
+    GetOnlineFeaturesResponse featureResponse =
+        servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
+
+    ImmutableMap<String, ValueProto.Value> expectedValueMap =
+        ImmutableMap.of(
+            driverEntityName,
+            driverEntityValue,
+            merchantEntityName,
+            merchantEntityValue,
+            FeatureV2.getFeatureStringRef(featureReference),
+            DataGenerator.createInt32Value(5),
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            DataGenerator.createEmptyValue());
+
+    ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
+        ImmutableMap.of(
+            driverEntityName,
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            merchantEntityName,
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(featureReference),
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
+
+    GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
+        GetOnlineFeaturesResponse.FieldValues.newBuilder()
+            .putAllFields(expectedValueMap)
+            .putAllStatuses(expectedStatusMap)
+            .build();
+    ImmutableList<GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
+        ImmutableList.of(expectedFieldValues);
+
+    assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
+  }
+
+  @Test
+  public void shouldReturnCorrectRowCount() {
+    // getOnlineFeatures Information
     String projectName = "default";
     String entityName = "driver_id";
-    String cassandraTableName = String.format("%s__%s", projectName, entityName);
-    byte[] entityFeatureKey =
-        String.valueOf(DataGenerator.createInt64Value(1).getInt64Val()).getBytes();
-    String featureTableName = "rides";
+    ValueProto.Value entityValue1 = ValueProto.Value.newBuilder().setInt64Val(1).build();
+    ValueProto.Value entityValue2 = ValueProto.Value.newBuilder().setInt64Val(2).build();
 
-    BoundStatement statement =
-        cqlSession
-            .prepare(
-                String.format(
-                    "SELECT * FROM %s.%s WHERE key = ?", CASSANDRA_KEYSPACE, cassandraTableName))
-            .bind(ByteBuffer.wrap(entityFeatureKey));
-    Row row = cqlSession.execute(statement).one();
+    // Instantiate EntityRows
+    GetOnlineFeaturesRequestV2.EntityRow entityRow1 =
+        DataGenerator.createEntityRow(entityName, entityValue1, 100);
+    GetOnlineFeaturesRequestV2.EntityRow entityRow2 =
+        DataGenerator.createEntityRow(entityName, entityValue2, 100);
+    ImmutableList<GetOnlineFeaturesRequestV2.EntityRow> entityRows =
+        ImmutableList.of(entityRow1, entityRow2);
 
-    assertEquals(ByteBuffer.wrap(entityFeatureKey), row.getByteBuffer("key"));
+    // Instantiate FeatureReferences
+    FeatureReferenceV2 featureReference =
+        DataGenerator.createFeatureReference("rides", "trip_cost");
+    FeatureReferenceV2 notFoundFeatureReference =
+        DataGenerator.createFeatureReference("rides", "trip_transaction");
+    FeatureReferenceV2 emptyFeatureReference =
+        DataGenerator.createFeatureReference("rides", "trip_empty");
+
+    ImmutableList<FeatureReferenceV2> featureReferences =
+        ImmutableList.of(featureReference, notFoundFeatureReference, emptyFeatureReference);
+
+    // Build GetOnlineFeaturesRequestV2
+    GetOnlineFeaturesRequestV2 onlineFeatureRequest =
+        TestUtils.createOnlineFeatureRequest(projectName, featureReferences, entityRows);
+    GetOnlineFeaturesResponse featureResponse =
+        servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
+
+    ImmutableMap<String, ValueProto.Value> expectedValueMap =
+        ImmutableMap.of(
+            entityName,
+            entityValue1,
+            FeatureV2.getFeatureStringRef(featureReference),
+            DataGenerator.createInt32Value(5),
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            DataGenerator.createEmptyValue(),
+            FeatureV2.getFeatureStringRef(emptyFeatureReference),
+            DataGenerator.createEmptyValue());
+
+    ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
+        ImmutableMap.of(
+            entityName,
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(featureReference),
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
+            FeatureV2.getFeatureStringRef(emptyFeatureReference),
+            GetOnlineFeaturesResponse.FieldStatus.NULL_VALUE);
+
+    GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
+        GetOnlineFeaturesResponse.FieldValues.newBuilder()
+            .putAllFields(expectedValueMap)
+            .putAllStatuses(expectedStatusMap)
+            .build();
+
+    ImmutableMap<String, ValueProto.Value> expectedValueMap2 =
+        ImmutableMap.of(
+            entityName,
+            entityValue2,
+            FeatureV2.getFeatureStringRef(featureReference),
+            DataGenerator.createEmptyValue(),
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            DataGenerator.createEmptyValue(),
+            FeatureV2.getFeatureStringRef(emptyFeatureReference),
+            DataGenerator.createEmptyValue());
+
+    ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap2 =
+        ImmutableMap.of(
+            entityName,
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(featureReference),
+            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
+            FeatureV2.getFeatureStringRef(emptyFeatureReference),
+            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
+
+    GetOnlineFeaturesResponse.FieldValues expectedFieldValues2 =
+        GetOnlineFeaturesResponse.FieldValues.newBuilder()
+            .putAllFields(expectedValueMap2)
+            .putAllStatuses(expectedStatusMap2)
+            .build();
+    ImmutableList<GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
+        ImmutableList.of(expectedFieldValues, expectedFieldValues2);
+
+    assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
   }
 }
