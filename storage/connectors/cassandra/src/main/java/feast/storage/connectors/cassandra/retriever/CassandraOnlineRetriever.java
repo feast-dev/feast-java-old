@@ -187,7 +187,7 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
     Map<ByteBuffer, Row> rowsFromCassandra =
         getFeaturesFromCassandra(tableName, rowKeys, columnFamilies);
 
-    return convertRowToFeature(rowKeys, rowsFromCassandra, featureReferences, columnFamilies);
+    return convertRowToFeature(rowKeys, rowsFromCassandra, featureReferences);
   }
 
   /**
@@ -230,8 +230,7 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
   private List<List<Feature>> convertRowToFeature(
       List<ByteBuffer> rowKeys,
       Map<ByteBuffer, Row> rows,
-      List<ServingAPIProto.FeatureReferenceV2> featureReferences,
-      List<String> columnFamilies) {
+      List<ServingAPIProto.FeatureReferenceV2> featureReferences) {
 
     return rowKeys.stream()
         .map(
@@ -240,24 +239,30 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
                 return Collections.<Feature>emptyList();
               } else {
                 Row row = rows.get(rowKey);
+                return featureReferences.stream()
+                    .map(ServingAPIProto.FeatureReferenceV2::getFeatureTable)
+                    .distinct()
+                    .flatMap(
+                        featureTableColumn -> {
+                          ByteBuffer featureValues = row.getByteBuffer(featureTableColumn);
+                          ByteBuffer schemaRefKey =
+                              row.getByteBuffer(featureTableColumn + SCHEMA_REF_SUFFIX);
 
-                String featureTableColumn = columnFamilies.get(0);
-                ByteBuffer schemaRefKey = row.getByteBuffer(featureTableColumn + SCHEMA_REF_SUFFIX);
-                ByteBuffer featureValues = row.getByteBuffer(featureTableColumn);
+                          List<Feature> features;
+                          try {
+                            features =
+                                decodeFeatures(
+                                    schemaRefKey,
+                                    featureValues,
+                                    featureReferences,
+                                    row.getLong(featureTableColumn + EVENT_TIMESTAMP_SUFFIX));
+                          } catch (IOException e) {
+                            throw new RuntimeException("Failed to decode features from Cassandra");
+                          }
 
-                List<Feature> features;
-                try {
-                  features =
-                      decodeFeatures(
-                          schemaRefKey,
-                          featureValues,
-                          featureReferences,
-                          row.getLong(featureTableColumn + EVENT_TIMESTAMP_SUFFIX));
-                } catch (IOException e) {
-                  throw new RuntimeException("Failed to decode features from Cassandra");
-                }
-
-                return new ArrayList<>(features);
+                          return features.stream();
+                        })
+                    .collect(Collectors.toList());
               }
             })
         .collect(Collectors.toList());
