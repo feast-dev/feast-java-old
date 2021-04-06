@@ -19,16 +19,16 @@ package feast.serving.it;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
-import com.datastax.oss.driver.api.core.cql.Row;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.hash.Hashing;
 import feast.common.it.DataGenerator;
 import feast.common.models.FeatureV2;
 import feast.proto.core.EntityProto;
-import feast.proto.serving.ServingAPIProto;
+import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
+import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
+import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
 import feast.proto.serving.ServingServiceGrpc;
 import feast.proto.types.ValueProto;
 import io.grpc.ManagedChannel;
@@ -40,6 +40,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -78,13 +79,13 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
   static CqlSession cqlSession;
   static final int FEAST_SERVING_PORT = 6570;
 
-  static final ServingAPIProto.FeatureReferenceV2 feature1Reference =
+  static final FeatureReferenceV2 feature1Reference =
       DataGenerator.createFeatureReference("rides", "trip_cost");
-  static final ServingAPIProto.FeatureReferenceV2 feature2Reference =
+  static final FeatureReferenceV2 feature2Reference =
       DataGenerator.createFeatureReference("rides", "trip_distance");
-  static final ServingAPIProto.FeatureReferenceV2 feature3Reference =
+  static final FeatureReferenceV2 feature3Reference =
       DataGenerator.createFeatureReference("rides", "trip_empty");
-  static final ServingAPIProto.FeatureReferenceV2 feature4Reference =
+  static final FeatureReferenceV2 feature4Reference =
       DataGenerator.createFeatureReference("rides", "trip_wrong_type");
 
   @ClassRule @Container
@@ -183,16 +184,13 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
                 + "{'class':'SimpleStrategy','replication_factor':'1'};",
             CASSANDRA_KEYSPACE));
 
-    // Single Entity Cassandra Table
-    cqlSession.execute(
-        String.format(
-            "CREATE TABLE %s.%s (key BLOB PRIMARY KEY);", CASSANDRA_KEYSPACE, cassandraTableName));
+    // Create Cassandra Tables
+    createCassandraTable(cassandraTableName);
+    createCassandraTable(compoundCassandraTableName);
 
     // Add column families
-    cqlSession.execute(
-        String.format(
-            "ALTER TABLE %s.%s ADD (%s BLOB, %s__schema_ref BLOB);",
-            CASSANDRA_KEYSPACE, cassandraTableName, ridesFeatureTableName, ridesFeatureTableName));
+    addCassandraTableColumn(cassandraTableName, ridesFeatureTableName);
+    addCassandraTableColumn(compoundCassandraTableName, rideMerchantFeatureTableName);
 
     /** Single Entity Ingestion Workflow */
     Schema ftSchema =
@@ -219,20 +217,50 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
     byte[] entityFeatureValue = createEntityValue(ftSchema, record);
     byte[] schemaKey = createSchemaKey(schemaReference);
 
-    PreparedStatement statement =
-        cqlSession.prepare(
-            String.format(
-                "INSERT INTO %s.%s (%s, %s__schema_ref, %s) VALUES (?, ?, ?)",
-                CASSANDRA_KEYSPACE,
-                cassandraTableName,
-                CASSANDRA_ENTITY_KEY,
-                ridesFeatureTableName,
-                ridesFeatureTableName));
-    cqlSession.execute(
-        statement.bind(
-            ByteBuffer.wrap(entityFeatureKey),
-            ByteBuffer.wrap(schemaKey),
-            ByteBuffer.wrap(entityFeatureValue)));
+    ingestData(
+        ridesFeatureTableName, cassandraTableName, entityFeatureKey, entityFeatureValue, schemaKey);
+
+    /** Compound Entity Ingestion Workflow */
+    Schema compoundFtSchema =
+        SchemaBuilder.record("DriverMerchantData")
+            .namespace(rideMerchantFeatureTableName)
+            .fields()
+            .requiredLong(feature1Reference.getName())
+            .requiredDouble(feature2Reference.getName())
+            .nullableString(feature3Reference.getName(), "null")
+            .requiredString(feature4Reference.getName())
+            .endRecord();
+    byte[] compoundSchemaReference =
+        Hashing.murmur3_32().hashBytes(compoundFtSchema.toString().getBytes()).asBytes();
+
+    GenericRecord compoundEntityRecord =
+        new GenericRecordBuilder(compoundFtSchema)
+            .set("trip_cost", 10L)
+            .set("trip_distance", 5.5)
+            .set("trip_empty", null)
+            .set("trip_wrong_type", "wrong_type")
+            .build();
+    ValueProto.Value driverEntityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
+    ValueProto.Value merchantEntityValue = ValueProto.Value.newBuilder().setInt64Val(1234).build();
+    ImmutableMap<String, ValueProto.Value> compoundEntityMap =
+        ImmutableMap.of(
+            driverEntityName, driverEntityValue, merchantEntityName, merchantEntityValue);
+    GetOnlineFeaturesRequestV2.EntityRow entityRow =
+        DataGenerator.createCompoundEntityRow(compoundEntityMap, 100);
+    byte[] compoundEntityFeatureKey =
+        ridesMerchantEntities.stream()
+            .map(entity -> DataGenerator.valueToString(entityRow.getFieldsMap().get(entity)))
+            .collect(Collectors.joining("#"))
+            .getBytes();
+    byte[] compoundEntityFeatureValue = createEntityValue(compoundFtSchema, compoundEntityRecord);
+    byte[] compoundSchemaKey = createSchemaKey(compoundSchemaReference);
+
+    ingestData(
+        rideMerchantFeatureTableName,
+        compoundCassandraTableName,
+        compoundEntityFeatureKey,
+        compoundEntityFeatureValue,
+        compoundSchemaKey);
 
     /** Schema Ingestion Workflow */
     cqlSession.execute(
@@ -240,14 +268,8 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             "CREATE TABLE %s.%s (schema_ref BLOB PRIMARY KEY, avro_schema BLOB);",
             CASSANDRA_KEYSPACE, CASSANDRA_SCHEMA_TABLE));
 
-    PreparedStatement schemaStatement =
-        cqlSession.prepare(
-            String.format(
-                "INSERT INTO %s.%s (schema_ref, avro_schema) VALUES (?, ?);",
-                CASSANDRA_KEYSPACE, CASSANDRA_SCHEMA_TABLE));
-    cqlSession.execute(
-        schemaStatement.bind(
-            ByteBuffer.wrap(schemaKey), ByteBuffer.wrap(ftSchema.toString().getBytes())));
+    ingestSchema(schemaKey, ftSchema);
+    ingestSchema(compoundSchemaKey, compoundFtSchema);
 
     // set up options for call credentials
     options.put("oauth_url", TOKEN_URL);
@@ -277,6 +299,53 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
     return entityFeatureValue;
   }
 
+  private static void createCassandraTable(String cassandraTableName) {
+    cqlSession.execute(
+        String.format(
+            "CREATE TABLE %s.%s (key BLOB PRIMARY KEY);", CASSANDRA_KEYSPACE, cassandraTableName));
+  }
+
+  private static void addCassandraTableColumn(String cassandraTableName, String featureTableName) {
+    cqlSession.execute(
+        String.format(
+            "ALTER TABLE %s.%s ADD (%s BLOB, %s__schema_ref BLOB);",
+            CASSANDRA_KEYSPACE, cassandraTableName, featureTableName, featureTableName));
+  }
+
+  private static void ingestData(
+      String featureTableName,
+      String cassandraTableName,
+      byte[] entityFeatureKey,
+      byte[] entityFeatureValue,
+      byte[] schemaKey) {
+    PreparedStatement statement =
+        cqlSession.prepare(
+            String.format(
+                "INSERT INTO %s.%s (%s, %s__schema_ref, %s) VALUES (?, ?, ?)",
+                CASSANDRA_KEYSPACE,
+                cassandraTableName,
+                CASSANDRA_ENTITY_KEY,
+                featureTableName,
+                featureTableName));
+
+    cqlSession.execute(
+        statement.bind(
+            ByteBuffer.wrap(entityFeatureKey),
+            ByteBuffer.wrap(schemaKey),
+            ByteBuffer.wrap(entityFeatureValue)));
+  }
+
+  private static void ingestSchema(byte[] schemaKey, Schema schema) {
+    PreparedStatement schemaStatement =
+        cqlSession.prepare(
+            String.format(
+                "INSERT INTO %s.%s (schema_ref, avro_schema) VALUES (?, ?);",
+                CASSANDRA_KEYSPACE, CASSANDRA_SCHEMA_TABLE));
+    cqlSession.execute(
+        schemaStatement.bind(
+            ByteBuffer.wrap(schemaKey), ByteBuffer.wrap(schema.toString().getBytes())));
+  }
+
   private static byte[] recordToAvro(GenericRecord datum, Schema schema) throws IOException {
     GenericDatumWriter<Object> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -299,24 +368,23 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
     ValueProto.Value entityValue = DataGenerator.createInt64Value(1);
 
     // Instantiate EntityRows
-    ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow entityRow =
+    GetOnlineFeaturesRequestV2.EntityRow entityRow =
         DataGenerator.createEntityRow(entityName, entityValue, 100);
-    ImmutableList<ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow> entityRows =
-        ImmutableList.of(entityRow);
+    ImmutableList<GetOnlineFeaturesRequestV2.EntityRow> entityRows = ImmutableList.of(entityRow);
 
     // Instantiate FeatureReferences
-    ServingAPIProto.FeatureReferenceV2 featureReference =
+    FeatureReferenceV2 featureReference =
         DataGenerator.createFeatureReference("rides", "trip_cost");
-    ServingAPIProto.FeatureReferenceV2 notFoundFeatureReference =
+    FeatureReferenceV2 notFoundFeatureReference =
         DataGenerator.createFeatureReference("rides", "trip_transaction");
 
-    ImmutableList<ServingAPIProto.FeatureReferenceV2> featureReferences =
+    ImmutableList<FeatureReferenceV2> featureReferences =
         ImmutableList.of(featureReference, notFoundFeatureReference);
 
     // Build GetOnlineFeaturesRequestV2
-    ServingAPIProto.GetOnlineFeaturesRequestV2 onlineFeatureRequest =
+    GetOnlineFeaturesRequestV2 onlineFeatureRequest =
         TestUtils.createOnlineFeatureRequest(projectName, featureReferences, entityRows);
-    ServingAPIProto.GetOnlineFeaturesResponse featureResponse =
+    GetOnlineFeaturesResponse featureResponse =
         servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
 
     ImmutableMap<String, ValueProto.Value> expectedValueMap =
@@ -328,21 +396,21 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
             DataGenerator.createEmptyValue());
 
-    ImmutableMap<String, ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
+    ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
         ImmutableMap.of(
             entityName,
-            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
             FeatureV2.getFeatureStringRef(featureReference),
-            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
-            ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
+            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
 
-    ServingAPIProto.GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
-        ServingAPIProto.GetOnlineFeaturesResponse.FieldValues.newBuilder()
+    GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
+        GetOnlineFeaturesResponse.FieldValues.newBuilder()
             .putAllFields(expectedValueMap)
             .putAllStatuses(expectedStatusMap)
             .build();
-    ImmutableList<ServingAPIProto.GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
+    ImmutableList<GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
         ImmutableList.of(expectedFieldValues);
 
     assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
