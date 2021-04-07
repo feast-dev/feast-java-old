@@ -41,6 +41,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericDatumWriter;
@@ -217,21 +218,9 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             .endRecord();
     byte[] schemaReference =
         Hashing.murmur3_32().hashBytes(ftSchema.toString().getBytes()).asBytes();
-
-    GenericRecord record =
-        new GenericRecordBuilder(ftSchema)
-            .set("trip_cost", 5)
-            .set("trip_distance", 3.5)
-            .set("trip_empty", null)
-            .set("trip_wrong_type", "test")
-            .build();
-    byte[] entityFeatureKey =
-        String.valueOf(DataGenerator.createInt64Value(1).getInt64Val()).getBytes();
-    byte[] entityFeatureValue = createEntityValue(ftSchema, record);
     byte[] schemaKey = createSchemaKey(schemaReference);
 
-    ingestData(
-        ridesFeatureTableName, cassandraTableName, entityFeatureKey, entityFeatureValue, schemaKey);
+    ingestBulk(ridesFeatureTableName, cassandraTableName, ftSchema, 20);
 
     Schema foodFtSchema =
         SchemaBuilder.record("FoodDriverData")
@@ -239,26 +228,14 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             .fields()
             .requiredInt(feature1Reference.getName())
             .requiredDouble(feature2Reference.getName())
+            .nullableString(feature3Reference.getName(), "null")
+            .requiredString(feature4Reference.getName())
             .endRecord();
     byte[] foodSchemaReference =
         Hashing.murmur3_32().hashBytes(foodFtSchema.toString().getBytes()).asBytes();
-
-    GenericRecord foodRecord =
-        new GenericRecordBuilder(foodFtSchema)
-            .set("trip_cost", 12)
-            .set("trip_distance", 7.5)
-            .build();
-    byte[] foodEntityFeatureKey =
-        String.valueOf(DataGenerator.createInt64Value(1).getInt64Val()).getBytes();
-    byte[] foodEntityFeatureValue = createEntityValue(foodFtSchema, foodRecord);
     byte[] foodSchemaKey = createSchemaKey(foodSchemaReference);
 
-    ingestData(
-        foodFeatureTableName,
-        cassandraTableName,
-        foodEntityFeatureKey,
-        foodEntityFeatureValue,
-        foodSchemaKey);
+    ingestBulk(foodFeatureTableName, cassandraTableName, foodFtSchema, 20);
 
     /** Compound Entity Ingestion Workflow */
     Schema compoundFtSchema =
@@ -376,6 +353,40 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             ByteBuffer.wrap(entityFeatureValue)));
   }
 
+  private static void ingestBulk(
+      String featureTableName, String cassandraTableName, Schema schema, Integer counts) {
+
+    IntStream.range(0, counts)
+        .forEach(
+            i -> {
+              try {
+                GenericRecord record =
+                    new GenericRecordBuilder(schema)
+                        .set("trip_cost", i)
+                        .set("trip_distance", (double) i)
+                        .set("trip_empty", null)
+                        .set("trip_wrong_type", "test")
+                        .build();
+                byte[] schemaReference =
+                    Hashing.murmur3_32().hashBytes(schema.toString().getBytes()).asBytes();
+
+                byte[] entityFeatureKey =
+                    String.valueOf(DataGenerator.createInt64Value(i).getInt64Val()).getBytes();
+                byte[] entityFeatureValue = createEntityValue(schema, record);
+
+                byte[] schemaKey = createSchemaKey(schemaReference);
+                ingestData(
+                    featureTableName,
+                    cassandraTableName,
+                    entityFeatureKey,
+                    entityFeatureValue,
+                    schemaKey);
+              } catch (IOException e) {
+                e.printStackTrace();
+              }
+            });
+  }
+
   private static void ingestSchema(byte[] schemaKey, Schema schema) {
     PreparedStatement schemaStatement =
         cqlSession.prepare(
@@ -433,7 +444,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             entityName,
             entityValue,
             FeatureV2.getFeatureStringRef(featureReference),
-            DataGenerator.createInt32Value(5),
+            DataGenerator.createInt32Value(1),
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
             DataGenerator.createEmptyValue());
 
@@ -496,7 +507,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             merchantEntityName,
             merchantEntityValue,
             FeatureV2.getFeatureStringRef(featureReference),
-            DataGenerator.createInt32Value(5),
+            DataGenerator.createInt32Value(1),
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
             DataGenerator.createEmptyValue());
 
@@ -523,20 +534,26 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
   }
 
   @Test
-  public void shouldReturnCorrectRowCount() {
+  public void shouldReturnCorrectRowCountAndOrder() {
     // getOnlineFeatures Information
     String projectName = "default";
     String entityName = "driver_id";
     ValueProto.Value entityValue1 = ValueProto.Value.newBuilder().setInt64Val(1).build();
     ValueProto.Value entityValue2 = ValueProto.Value.newBuilder().setInt64Val(2).build();
+    ValueProto.Value entityValue3 = ValueProto.Value.newBuilder().setInt64Val(3).build();
+    ValueProto.Value entityValue4 = ValueProto.Value.newBuilder().setInt64Val(4).build();
 
     // Instantiate EntityRows
     GetOnlineFeaturesRequestV2.EntityRow entityRow1 =
         DataGenerator.createEntityRow(entityName, entityValue1, 100);
     GetOnlineFeaturesRequestV2.EntityRow entityRow2 =
         DataGenerator.createEntityRow(entityName, entityValue2, 100);
+    GetOnlineFeaturesRequestV2.EntityRow entityRow3 =
+        DataGenerator.createEntityRow(entityName, entityValue3, 100);
+    GetOnlineFeaturesRequestV2.EntityRow entityRow4 =
+        DataGenerator.createEntityRow(entityName, entityValue4, 100);
     ImmutableList<GetOnlineFeaturesRequestV2.EntityRow> entityRows =
-        ImmutableList.of(entityRow1, entityRow2);
+        ImmutableList.of(entityRow1, entityRow2, entityRow4, entityRow3);
 
     // Instantiate FeatureReferences
     FeatureReferenceV2 featureReference =
@@ -560,7 +577,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             entityName,
             entityValue1,
             FeatureV2.getFeatureStringRef(featureReference),
-            DataGenerator.createInt32Value(5),
+            DataGenerator.createInt32Value(1),
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
             DataGenerator.createEmptyValue(),
             FeatureV2.getFeatureStringRef(emptyFeatureReference),
@@ -588,30 +605,52 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             entityName,
             entityValue2,
             FeatureV2.getFeatureStringRef(featureReference),
-            DataGenerator.createEmptyValue(),
+            DataGenerator.createInt32Value(2),
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
             DataGenerator.createEmptyValue(),
             FeatureV2.getFeatureStringRef(emptyFeatureReference),
             DataGenerator.createEmptyValue());
 
-    ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap2 =
+    ImmutableMap<String, ValueProto.Value> expectedValueMap3 =
         ImmutableMap.of(
             entityName,
-            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            entityValue3,
             FeatureV2.getFeatureStringRef(featureReference),
-            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
+            DataGenerator.createInt32Value(3),
             FeatureV2.getFeatureStringRef(notFoundFeatureReference),
-            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND,
+            DataGenerator.createEmptyValue(),
             FeatureV2.getFeatureStringRef(emptyFeatureReference),
-            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
+            DataGenerator.createEmptyValue());
+
+    ImmutableMap<String, ValueProto.Value> expectedValueMap4 =
+        ImmutableMap.of(
+            entityName,
+            entityValue4,
+            FeatureV2.getFeatureStringRef(featureReference),
+            DataGenerator.createInt32Value(4),
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            DataGenerator.createEmptyValue(),
+            FeatureV2.getFeatureStringRef(emptyFeatureReference),
+            DataGenerator.createEmptyValue());
 
     GetOnlineFeaturesResponse.FieldValues expectedFieldValues2 =
         GetOnlineFeaturesResponse.FieldValues.newBuilder()
             .putAllFields(expectedValueMap2)
-            .putAllStatuses(expectedStatusMap2)
+            .putAllStatuses(expectedStatusMap)
+            .build();
+    GetOnlineFeaturesResponse.FieldValues expectedFieldValues3 =
+        GetOnlineFeaturesResponse.FieldValues.newBuilder()
+            .putAllFields(expectedValueMap3)
+            .putAllStatuses(expectedStatusMap)
+            .build();
+    GetOnlineFeaturesResponse.FieldValues expectedFieldValues4 =
+        GetOnlineFeaturesResponse.FieldValues.newBuilder()
+            .putAllFields(expectedValueMap4)
+            .putAllStatuses(expectedStatusMap)
             .build();
     ImmutableList<GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
-        ImmutableList.of(expectedFieldValues, expectedFieldValues2);
+        ImmutableList.of(
+            expectedFieldValues, expectedFieldValues2, expectedFieldValues4, expectedFieldValues3);
 
     assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
   }
@@ -655,13 +694,13 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             entityName,
             entityValue,
             FeatureV2.getFeatureStringRef(rideFeatureReference),
-            DataGenerator.createInt32Value(5),
+            DataGenerator.createInt32Value(1),
             FeatureV2.getFeatureStringRef(rideFeatureReference2),
-            DataGenerator.createDoubleValue(3.5),
+            DataGenerator.createDoubleValue(1.0),
             FeatureV2.getFeatureStringRef(foodFeatureReference),
-            DataGenerator.createInt32Value(12),
+            DataGenerator.createInt32Value(1),
             FeatureV2.getFeatureStringRef(foodFeatureReference2),
-            DataGenerator.createDoubleValue(7.5));
+            DataGenerator.createDoubleValue(1.0));
 
     ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
         ImmutableMap.of(
