@@ -27,10 +27,12 @@ import com.google.common.collect.Iterables;
 import com.google.protobuf.ByteString;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericRecord;
 
 public class BigTableSchemaRegistry {
   private final BigtableDataClient client;
-  private final LoadingCache<SchemaReference, Schema> cache;
+  private final LoadingCache<SchemaReference, GenericDatumReader<GenericRecord>> cache;
 
   private static String COLUMN_FAMILY = "metadata";
   private static String QUALIFIER = "avro";
@@ -52,27 +54,46 @@ public class BigTableSchemaRegistry {
     public ByteString getSchemaHash() {
       return schemaHash;
     }
+
+    @Override
+    public int hashCode() {
+      int result = tableName.hashCode();
+      result = 31 * result + schemaHash.hashCode();
+      return result;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+
+      SchemaReference that = (SchemaReference) o;
+
+      if (!tableName.equals(that.tableName)) return false;
+      return schemaHash.equals(that.schemaHash);
+    }
   }
 
   public BigTableSchemaRegistry(BigtableDataClient client) {
     this.client = client;
 
-    CacheLoader<SchemaReference, Schema> schemaCacheLoader = CacheLoader.from(this::loadSchema);
+    CacheLoader<SchemaReference, GenericDatumReader<GenericRecord>> schemaCacheLoader =
+        CacheLoader.from(this::loadReader);
 
     cache = CacheBuilder.newBuilder().build(schemaCacheLoader);
   }
 
-  public Schema getSchema(SchemaReference reference) {
-    Schema schema;
+  public GenericDatumReader<GenericRecord> getReader(SchemaReference reference) {
+    GenericDatumReader<GenericRecord> reader;
     try {
-      schema = this.cache.get(reference);
+      reader = this.cache.get(reference);
     } catch (ExecutionException | CacheLoader.InvalidCacheLoadException e) {
       throw new RuntimeException(String.format("Unable to find Schema"), e);
     }
-    return schema;
+    return reader;
   }
 
-  private Schema loadSchema(SchemaReference reference) {
+  private GenericDatumReader<GenericRecord> loadReader(SchemaReference reference) {
     Row row =
         client.readRow(
             reference.getTableName(),
@@ -80,6 +101,7 @@ public class BigTableSchemaRegistry {
             Filters.FILTERS.family().exactMatch(COLUMN_FAMILY));
     RowCell last = Iterables.getLast(row.getCells(COLUMN_FAMILY, QUALIFIER));
 
-    return new Schema.Parser().parse(last.getValue().toStringUtf8());
+    Schema schema = new Schema.Parser().parse(last.getValue().toStringUtf8());
+    return new GenericDatumReader<>(schema);
   }
 }
