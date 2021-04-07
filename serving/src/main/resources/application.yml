@@ -62,8 +62,7 @@ feast:
     - name: cassandra
       type: CASSANDRA
       config:
-        host: localhost
-        port: 9042
+        connection_string: localhost:9042
         data_center: datacenter1
         keyspace: feast
   tracing:
