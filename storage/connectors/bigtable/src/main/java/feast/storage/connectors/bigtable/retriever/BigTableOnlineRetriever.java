@@ -35,7 +35,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.avro.AvroRuntimeException;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.*;
@@ -138,6 +137,7 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
       String tableName,
       ByteString value,
       List<FeatureReferenceV2> featureReferences,
+      BinaryDecoder reusedDecoder,
       long timestamp)
       throws IOException {
     ByteString schemaReferenceBytes = value.substring(0, 4);
@@ -146,11 +146,10 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
     BigTableSchemaRegistry.SchemaReference schemaReference =
         new BigTableSchemaRegistry.SchemaReference(tableName, schemaReferenceBytes);
 
-    Schema schema = schemaRegistry.getSchema(schemaReference);
+    GenericDatumReader<GenericRecord> reader = schemaRegistry.getReader(schemaReference);
 
-    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
-    Decoder decoder = DecoderFactory.get().binaryDecoder(featureValueBytes, null);
-    GenericRecord record = reader.read(null, decoder);
+    reusedDecoder = DecoderFactory.get().binaryDecoder(featureValueBytes, reusedDecoder);
+    GenericRecord record = reader.read(null, reusedDecoder);
 
     return featureReferences.stream()
         .map(
@@ -237,6 +236,8 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
       Map<ByteString, Row> rows,
       List<FeatureReferenceV2> featureReferences) {
 
+    BinaryDecoder reusedDecoder = DecoderFactory.get().binaryDecoder(new byte[0], null);
+
     return rowKeys.stream()
         .map(
             rowKey -> {
@@ -269,6 +270,7 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
                                     tableName,
                                     value,
                                     localFeatureReferences,
+                                    reusedDecoder,
                                     rowCell.getTimestamp());
                           } catch (IOException e) {
                             throw new RuntimeException("Failed to decode features from BigTable");
