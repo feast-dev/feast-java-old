@@ -170,7 +170,7 @@ public class SpecServiceIT extends BaseIT {
           equalTo(
               String.format(
                   "INVALID_ARGUMENT: invalid value for project resource, %s: "
-                      + "argument must only contain alphanumeric characters and underscores.",
+                      + "argument must only contain alphanumeric characters, dashes, or underscores.",
                   filter.getProject())));
     }
   }
@@ -226,7 +226,7 @@ public class SpecServiceIT extends BaseIT {
           equalTo(
               String.format(
                   "INVALID_ARGUMENT: invalid value for project resource, %s: "
-                      + "argument must only contain alphanumeric characters and underscores.",
+                      + "argument must only contain alphanumeric characters, dashes, or underscores.",
                   filter.getProject())));
     }
   }

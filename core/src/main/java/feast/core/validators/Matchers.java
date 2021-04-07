@@ -29,8 +29,8 @@ public class Matchers {
   private static Pattern UPPER_SNAKE_CASE_REGEX = Pattern.compile("^[A-Z0-9]+(_[A-Z0-9]+)*$");
   private static Pattern LOWER_SNAKE_CASE_REGEX = Pattern.compile("^[a-z0-9]+(_[a-z0-9]+)*$");
   private static Pattern VALID_CHARACTERS_REGEX = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
-  private static Pattern VALID_CHARACTERS_REGEX_WITH_ASTERISK_WILDCARD =
-      Pattern.compile("^[a-zA-Z0-9\\-_*]*$");
+  private static Pattern VALID_CHARACTERS_REGEX_WITH_DASH =
+      Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_-]*$");
 
   private static String ERROR_MESSAGE_TEMPLATE = "invalid value for %s resource, %s: %s";
 
@@ -70,15 +70,15 @@ public class Matchers {
     }
   }
 
-  public static void checkValidCharactersAllowAsterisk(String input, String resource)
+  public static void checkValidCharactersAllowDash(String input, String resource)
       throws IllegalArgumentException {
-    if (!VALID_CHARACTERS_REGEX_WITH_ASTERISK_WILDCARD.matcher(input).matches()) {
+    if (!VALID_CHARACTERS_REGEX_WITH_DASH.matcher(input).matches()) {
       throw new IllegalArgumentException(
           String.format(
               ERROR_MESSAGE_TEMPLATE,
               resource,
               input,
-              "argument must only contain alphanumeric characters, dashes, underscores, or an asterisk."));
+              "argument must only contain alphanumeric characters, dashes, or underscores."));
     }
   }
 
