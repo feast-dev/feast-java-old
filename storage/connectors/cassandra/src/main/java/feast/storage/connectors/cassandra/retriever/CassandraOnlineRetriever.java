@@ -26,7 +26,7 @@ import feast.proto.serving.ServingAPIProto;
 import feast.storage.api.retriever.Feature;
 import feast.storage.api.retriever.NativeFeature;
 import feast.storage.api.retriever.OnlineRetrieverV2;
-import feast.storage.api.retriever.StorageRetriever;
+import feast.storage.connectors.sstable.retriever.SSTableOnlineRetriever;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -39,7 +39,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.DecoderFactory;
 
-public class CassandraOnlineRetriever extends StorageRetriever implements OnlineRetrieverV2 {
+public class CassandraOnlineRetriever implements SSTableOnlineRetriever, OnlineRetrieverV2 {
 
   private final CqlSession session;
   private final CassandraSchemaRegistry schemaRegistry;
@@ -120,7 +120,7 @@ public class CassandraOnlineRetriever extends StorageRetriever implements Online
       List<ServingAPIProto.FeatureReferenceV2> featureReferences,
       List<String> entityNames) {
 
-    List<String> columnFamilies = getColumnFamilies(featureReferences);
+    List<String> columnFamilies = getColumns(featureReferences);
     String tableName = getTableName(project, entityNames);
 
     List<ByteBuffer> rowKeys =

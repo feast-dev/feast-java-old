@@ -24,6 +24,12 @@
         </dependency>
 
         <dependency>
+            <groupId>dev.feast</groupId>
+            <artifactId>feast-storage-connector-sstable</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>com.datastax.oss</groupId>
             <artifactId>java-driver-core</artifactId>
             <version>4.11.0</version>

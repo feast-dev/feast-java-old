@@ -14,24 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package feast.storage.api.retriever;
+package feast.storage.connectors.sstable.retriever;
 
 import feast.proto.serving.ServingAPIProto;
 import feast.proto.types.ValueProto;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class StorageRetriever {
+public interface SSTableOnlineRetriever {
 
   /**
-   * Generate name of Cassandra table in the form of <feastProject>__<entityNames>
+   * Retrieve name of SSTable corresponding to entities in retrieval call
    *
    * @param project Name of Feast project
    * @param entityNames List of entities used in retrieval call
    * @return Name of Cassandra table
    */
-  protected String getTableName(String project, List<String> entityNames) {
-    return String.format("%s__%s", project, entityNames.stream().collect(Collectors.joining("__")));
+  default String getTableName(String project, List<String> entityNames) {
+    return String.format("%s__%s", project, String.join("__", entityNames));
   }
 
   /**
@@ -41,7 +41,7 @@ public class StorageRetriever {
    * @param v Entity value of Feast valueType
    * @return String representation of Entity value
    */
-  protected String valueToString(ValueProto.Value v) {
+  default String valueToString(ValueProto.Value v) {
     String stringRepr;
     switch (v.getValCase()) {
       case STRING_VAL:
@@ -64,13 +64,12 @@ public class StorageRetriever {
   }
 
   /**
-   * Retrieve Cassandra table column families based on FeatureTable names.
+   * Retrieve SSTable columns based on Feature references.
    *
-   * @param featureReferences List of feature references of features in retrieval call
-   * @return List of String of FeatureTable names
+   * @param featureReferences List of feature references in retrieval call
+   * @return List of String of column names
    */
-  protected List<String> getColumnFamilies(
-      List<ServingAPIProto.FeatureReferenceV2> featureReferences) {
+  default List<String> getColumns(List<ServingAPIProto.FeatureReferenceV2> featureReferences) {
     return featureReferences.stream()
         .map(ServingAPIProto.FeatureReferenceV2::getFeatureTable)
         .distinct()

@@ -28,7 +28,7 @@ import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow;
 import feast.storage.api.retriever.Feature;
 import feast.storage.api.retriever.NativeFeature;
 import feast.storage.api.retriever.OnlineRetrieverV2;
-import feast.storage.api.retriever.StorageRetriever;
+import feast.storage.connectors.sstable.retriever.SSTableOnlineRetriever;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Function;
@@ -39,7 +39,7 @@ import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.*;
 
-public class BigTableOnlineRetriever extends StorageRetriever implements OnlineRetrieverV2 {
+public class BigTableOnlineRetriever implements SSTableOnlineRetriever, OnlineRetrieverV2 {
 
   private BigtableDataClient client;
   private BigTableSchemaRegistry schemaRegistry;
@@ -126,7 +126,7 @@ public class BigTableOnlineRetriever extends StorageRetriever implements OnlineR
       List<EntityRow> entityRows,
       List<FeatureReferenceV2> featureReferences,
       List<String> entityNames) {
-    List<String> columnFamilies = getColumnFamilies(featureReferences);
+    List<String> columnFamilies = getColumns(featureReferences);
     String tableName = getTableName(project, entityNames);
 
     List<ByteString> rowKeys =

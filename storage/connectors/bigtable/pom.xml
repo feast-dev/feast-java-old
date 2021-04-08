@@ -31,6 +31,12 @@
         </dependency>
 
         <dependency>
+            <groupId>dev.feast</groupId>
+            <artifactId>feast-storage-connector-sstable</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
         </dependency>
