@@ -27,7 +27,6 @@ import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow;
 import feast.storage.api.retriever.Feature;
 import feast.storage.api.retriever.NativeFeature;
-import feast.storage.api.retriever.OnlineRetrieverV2;
 import feast.storage.connectors.sstable.retriever.SSTableOnlineRetriever;
 import java.io.IOException;
 import java.util.*;
@@ -39,7 +38,7 @@ import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.*;
 
-public class BigTableOnlineRetriever implements SSTableOnlineRetriever, OnlineRetrieverV2 {
+public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteString, Row> {
 
   private BigtableDataClient client;
   private BigTableSchemaRegistry schemaRegistry;
@@ -56,7 +55,8 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever, OnlineRe
    * @param entityNames List of entities related to feature references in retrieval call
    * @return BigTable key for retrieval
    */
-  private ByteString convertEntityValueToKey(EntityRow entityRow, List<String> entityNames) {
+  @Override
+  public ByteString convertEntityValueToKey(EntityRow entityRow, List<String> entityNames) {
     return ByteString.copyFrom(
         entityNames.stream()
             .map(entity -> entityRow.getFieldsMap().get(entity))
@@ -65,6 +65,93 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever, OnlineRe
             .getBytes());
   }
 
+  /**
+   * Converts rowCell feature value into @NativeFeature type.
+   *
+   * @param tableName Name of BigTable table
+   * @param rowKeys List of keys of rows to retrieve
+   * @param rows Map of rowKey to Row related to it
+   * @param featureReferences List of feature references
+   * @return List of List of Features associated with respective rowKey
+   */
+  @Override
+  public List<List<Feature>> convertRowToFeature(
+      String tableName,
+      List<ByteString> rowKeys,
+      Map<ByteString, Row> rows,
+      List<FeatureReferenceV2> featureReferences) {
+
+    BinaryDecoder reusedDecoder = DecoderFactory.get().binaryDecoder(new byte[0], null);
+
+    return rowKeys.stream()
+        .map(
+            rowKey -> {
+              if (!rows.containsKey(rowKey)) {
+                return Collections.<Feature>emptyList();
+              } else {
+                Row row = rows.get(rowKey);
+                return featureReferences.stream()
+                    .map(FeatureReferenceV2::getFeatureTable)
+                    .distinct()
+                    .map(cf -> row.getCells(cf, ""))
+                    .filter(ls -> !ls.isEmpty())
+                    .flatMap(
+                        rowCells -> {
+                          RowCell rowCell = rowCells.get(0); // Latest cell
+                          String family = rowCell.getFamily();
+                          ByteString value = rowCell.getValue();
+
+                          List<Feature> features;
+                          List<FeatureReferenceV2> localFeatureReferences =
+                              featureReferences.stream()
+                                  .filter(
+                                      featureReference ->
+                                          featureReference.getFeatureTable().equals(family))
+                                  .collect(Collectors.toList());
+
+                          try {
+                            features =
+                                decodeFeatures(
+                                    tableName,
+                                    value,
+                                    localFeatureReferences,
+                                    reusedDecoder,
+                                    rowCell.getTimestamp());
+                          } catch (IOException e) {
+                            throw new RuntimeException("Failed to decode features from BigTable");
+                          }
+
+                          return features.stream();
+                        })
+                    .collect(Collectors.toList());
+              }
+            })
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Retrieve rows for each row entity key by generating BigTable rowQuery with filters based on
+   * column families.
+   *
+   * @param tableName Name of BigTable table
+   * @param rowKeys List of keys of rows to retrieve
+   * @param columnFamilies List of FeatureTable names
+   * @return Map of retrieved features for each rowKey
+   */
+  @Override
+  public Map<ByteString, Row> getFeaturesFromSSTable(
+      String tableName, List<ByteString> rowKeys, List<String> columnFamilies) {
+    Query rowQuery = Query.create(tableName);
+    Filters.InterleaveFilter familyFilter = Filters.FILTERS.interleave();
+    columnFamilies.forEach(cf -> familyFilter.filter(Filters.FILTERS.family().exactMatch(cf)));
+
+    for (ByteString rowKey : rowKeys) {
+      rowQuery.rowKey(rowKey);
+    }
+
+    return StreamSupport.stream(client.readRows(rowQuery).spliterator(), false)
+        .collect(Collectors.toMap(Row::getKey, Function.identity()));
+  }
   /**
    * AvroRuntimeException is thrown if feature name does not exist in avro schema. Empty Object is
    * returned when null is retrieved from BigTable RowCell.
@@ -120,111 +207,4 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever, OnlineRe
         .collect(Collectors.toList());
   }
 
-  @Override
-  public List<List<Feature>> getOnlineFeatures(
-      String project,
-      List<EntityRow> entityRows,
-      List<FeatureReferenceV2> featureReferences,
-      List<String> entityNames) {
-    List<String> columnFamilies = getColumns(featureReferences);
-    String tableName = getTableName(project, entityNames);
-
-    List<ByteString> rowKeys =
-        entityRows.stream()
-            .map(row -> convertEntityValueToKey(row, entityNames))
-            .collect(Collectors.toList());
-    Map<ByteString, Row> rowsFromBigTable =
-        getFeaturesFromBigTable(tableName, rowKeys, columnFamilies);
-    List<List<Feature>> features =
-        convertRowToFeature(tableName, rowKeys, rowsFromBigTable, featureReferences);
-
-    return features;
-  }
-
-  /**
-   * Retrieve rows for each row entity key by generating BigTable rowQuery with filters based on
-   * column families.
-   *
-   * @param tableName Name of BigTable table
-   * @param rowKeys List of keys of rows to retrieve
-   * @param columnFamilies List of FeatureTable names
-   * @return Map of retrieved features for each rowKey
-   */
-  private Map<ByteString, Row> getFeaturesFromBigTable(
-      String tableName, List<ByteString> rowKeys, List<String> columnFamilies) {
-
-    Query rowQuery = Query.create(tableName);
-    Filters.InterleaveFilter familyFilter = Filters.FILTERS.interleave();
-    columnFamilies.forEach(cf -> familyFilter.filter(Filters.FILTERS.family().exactMatch(cf)));
-
-    for (ByteString rowKey : rowKeys) {
-      rowQuery.rowKey(rowKey);
-    }
-
-    return StreamSupport.stream(client.readRows(rowQuery).spliterator(), false)
-        .collect(Collectors.toMap(Row::getKey, Function.identity()));
-  }
-
-  /**
-   * Converts rowCell feature value into @NativeFeature type.
-   *
-   * @param tableName Name of BigTable table
-   * @param rowKeys List of keys of rows to retrieve
-   * @param rows Map of rowKey to Row related to it
-   * @param featureReferences List of feature references
-   * @return List of List of Features associated with respective rowKey
-   */
-  private List<List<Feature>> convertRowToFeature(
-      String tableName,
-      List<ByteString> rowKeys,
-      Map<ByteString, Row> rows,
-      List<FeatureReferenceV2> featureReferences) {
-
-    BinaryDecoder reusedDecoder = DecoderFactory.get().binaryDecoder(new byte[0], null);
-
-    return rowKeys.stream()
-        .map(
-            rowKey -> {
-              if (!rows.containsKey(rowKey)) {
-                return Collections.<Feature>emptyList();
-              } else {
-                Row row = rows.get(rowKey);
-                return featureReferences.stream()
-                    .map(FeatureReferenceV2::getFeatureTable)
-                    .distinct()
-                    .map(cf -> row.getCells(cf, ""))
-                    .filter(ls -> !ls.isEmpty())
-                    .flatMap(
-                        rowCells -> {
-                          RowCell rowCell = rowCells.get(0); // Latest cell
-                          String family = rowCell.getFamily();
-                          ByteString value = rowCell.getValue();
-
-                          List<Feature> features;
-                          List<FeatureReferenceV2> localFeatureReferences =
-                              featureReferences.stream()
-                                  .filter(
-                                      featureReference ->
-                                          featureReference.getFeatureTable().equals(family))
-                                  .collect(Collectors.toList());
-
-                          try {
-                            features =
-                                decodeFeatures(
-                                    tableName,
-                                    value,
-                                    localFeatureReferences,
-                                    reusedDecoder,
-                                    rowCell.getTimestamp());
-                          } catch (IOException e) {
-                            throw new RuntimeException("Failed to decode features from BigTable");
-                          }
-
-                          return features.stream();
-                        })
-                    .collect(Collectors.toList());
-              }
-            })
-        .collect(Collectors.toList());
-  }
 }

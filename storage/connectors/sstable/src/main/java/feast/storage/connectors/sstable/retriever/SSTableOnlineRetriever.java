@@ -16,12 +16,75 @@
  */
 package feast.storage.connectors.sstable.retriever;
 
-import feast.proto.serving.ServingAPIProto;
+import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
+import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow;
 import feast.proto.types.ValueProto;
+import feast.storage.api.retriever.Feature;
+import feast.storage.api.retriever.OnlineRetrieverV2;
+
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
-public interface SSTableOnlineRetriever {
+/**
+ * @param <K> Decoded value type of the partition key
+ * @param <V> Type of the SSTable row
+ */
+public interface SSTableOnlineRetriever<K, V> extends OnlineRetrieverV2 {
+
+  @Override
+  default List<List<Feature>> getOnlineFeatures(
+      String project,
+      List<EntityRow> entityRows,
+      List<FeatureReferenceV2> featureReferences,
+      List<String> entityNames) {
+
+    List<String> columnFamilies = getSSTableColumns(featureReferences);
+    String tableName = getSSTable(project, entityNames);
+
+    List<K> rowKeys =
+        entityRows.stream()
+            .map(row -> convertEntityValueToKey(row, entityNames))
+            .collect(Collectors.toList());
+
+    Map<K, V> rowsFromSSTable = getFeaturesFromSSTable(tableName, rowKeys, columnFamilies);
+
+    return convertRowToFeature(tableName, rowKeys, rowsFromSSTable, featureReferences);
+  }
+
+  /**
+   * Generate SSTable key.
+   *
+   * @param entityRow Single EntityRow representation in feature retrieval call
+   * @param entityNames List of entities related to feature references in retrieval call
+   * @return SSTable key for retrieval
+   */
+  K convertEntityValueToKey(EntityRow entityRow, List<String> entityNames);
+
+  /**
+   * Converts SSTable rows into @NativeFeature type.
+   *
+   * @param tableName Name of SSTable
+   * @param rowKeys List of keys of rows to retrieve
+   * @param rows Map of rowKey to Row related to it
+   * @param featureReferences List of feature references
+   * @return List of List of Features associated with respective rowKey
+   */
+  List<List<Feature>> convertRowToFeature(
+      String tableName,
+      List<K> rowKeys,
+      Map<K, V> rows,
+      List<FeatureReferenceV2> featureReferences);
+
+  /**
+   * Retrieve rows for each row entity key.
+   *
+   * @param tableName Name of SSTable
+   * @param rowKeys List of keys of rows to retrieve
+   * @param columnFamilies List of column names
+   * @return Map of retrieved features for each rowKey
+   */
+  Map<K, V> getFeaturesFromSSTable(String tableName, List<K> rowKeys, List<String> columnFamilies);
 
   /**
    * Retrieve name of SSTable corresponding to entities in retrieval call
@@ -30,7 +93,7 @@ public interface SSTableOnlineRetriever {
    * @param entityNames List of entities used in retrieval call
    * @return Name of Cassandra table
    */
-  default String getTableName(String project, List<String> entityNames) {
+  default String getSSTable(String project, List<String> entityNames) {
     return String.format("%s__%s", project, String.join("__", entityNames));
   }
 
@@ -69,10 +132,11 @@ public interface SSTableOnlineRetriever {
    * @param featureReferences List of feature references in retrieval call
    * @return List of String of column names
    */
-  default List<String> getColumns(List<ServingAPIProto.FeatureReferenceV2> featureReferences) {
+  default List<String> getSSTableColumns(List<FeatureReferenceV2> featureReferences) {
     return featureReferences.stream()
-        .map(ServingAPIProto.FeatureReferenceV2::getFeatureTable)
+        .map(FeatureReferenceV2::getFeatureTable)
         .distinct()
         .collect(Collectors.toList());
   }
+
 }
