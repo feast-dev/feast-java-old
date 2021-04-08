@@ -73,6 +73,7 @@ public class CassandraOnlineRetriever implements SSTableOnlineRetriever<ByteBuff
   /**
    * Converts Cassandra rows into @NativeFeature type.
    *
+   * @param tableName Name of Cassandra table
    * @param rowKeys List of keys of rows to retrieve
    * @param rows Map of rowKey to Row related to it
    * @param featureReferences List of feature references
@@ -164,6 +165,17 @@ public class CassandraOnlineRetriever implements SSTableOnlineRetriever<ByteBuff
         .collect(Collectors.toMap((Row row) -> row.getByteBuffer(ENTITY_KEY), Function.identity()));
   }
 
+  /**
+   * AvroRuntimeException is thrown if feature name does not exist in avro schema.
+   *
+   * @param schemaRefKey Schema reference key
+   * @param value Value of Cassandra cell where bytes represent avro-serialized features
+   * @param featureReferences List of feature references
+   * @param reusedDecoder Decoder for decoding feature values
+   * @param timestamp Timestamp of rowCell
+   * @return @NativeFeature with retrieved value stored in Cassandra cell
+   * @throws IOException
+   */
   private List<Feature> decodeFeatures(
       ByteBuffer schemaRefKey,
       ByteBuffer value,

@@ -152,6 +152,7 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteStrin
     return StreamSupport.stream(client.readRows(rowQuery).spliterator(), false)
         .collect(Collectors.toMap(Row::getKey, Function.identity()));
   }
+
   /**
    * AvroRuntimeException is thrown if feature name does not exist in avro schema. Empty Object is
    * returned when null is retrieved from BigTable RowCell.
@@ -160,6 +161,7 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteStrin
    * @param value Value of BigTable cell where first 4 bytes represent the schema reference and
    *     remaining bytes represent avro-serialized features
    * @param featureReferences List of feature references
+   * @param reusedDecoder Decoder for decoding feature values
    * @param timestamp Timestamp of rowCell
    * @return @NativeFeature with retrieved value stored in BigTable RowCell
    * @throws IOException
@@ -206,5 +208,4 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteStrin
         .filter(Objects::nonNull)
         .collect(Collectors.toList());
   }
-
 }

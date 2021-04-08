@@ -21,7 +21,6 @@ import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow;
 import feast.proto.types.ValueProto;
 import feast.storage.api.retriever.Feature;
 import feast.storage.api.retriever.OnlineRetrieverV2;
-
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -138,5 +137,4 @@ public interface SSTableOnlineRetriever<K, V> extends OnlineRetrieverV2 {
         .distinct()
         .collect(Collectors.toList());
   }
-
 }
