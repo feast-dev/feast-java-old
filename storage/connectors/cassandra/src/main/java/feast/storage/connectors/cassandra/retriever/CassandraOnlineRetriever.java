@@ -23,10 +23,10 @@ import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
 import com.google.protobuf.Timestamp;
 import feast.proto.serving.ServingAPIProto;
-import feast.proto.types.ValueProto;
 import feast.storage.api.retriever.Feature;
 import feast.storage.api.retriever.NativeFeature;
 import feast.storage.api.retriever.OnlineRetrieverV2;
+import feast.storage.api.retriever.StorageRetriever;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -39,7 +39,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.DecoderFactory;
 
-public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
+public class CassandraOnlineRetriever extends StorageRetriever implements OnlineRetrieverV2 {
 
   private final CqlSession session;
   private final CassandraSchemaRegistry schemaRegistry;
@@ -54,54 +54,13 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
   }
 
   /**
-   * Generate name of Cassandra table in the form of <feastProject>__<entityNames>
-   *
-   * @param project Name of Feast project
-   * @param entityNames List of entities used in retrieval call
-   * @return Name of Cassandra table
-   */
-  private String getTableName(String project, List<String> entityNames) {
-
-    return String.format("%s__%s", project, String.join("__", entityNames));
-  }
-
-  /**
-   * Convert Entity value from Feast valueType to String type. Currently only supports STRING_VAL,
-   * INT64_VAL, INT32_VAL and BYTES_VAL.
-   *
-   * @param v Entity value of Feast valueType
-   * @return String representation of Entity value
-   */
-  private String valueToString(ValueProto.Value v) {
-    String stringRepr;
-    switch (v.getValCase()) {
-      case STRING_VAL:
-        stringRepr = v.getStringVal();
-        break;
-      case INT64_VAL:
-        stringRepr = String.valueOf(v.getInt64Val());
-        break;
-      case INT32_VAL:
-        stringRepr = String.valueOf(v.getInt32Val());
-        break;
-      case BYTES_VAL:
-        stringRepr = v.getBytesVal().toString();
-        break;
-      default:
-        throw new RuntimeException("Type is not supported to be entity");
-    }
-
-    return stringRepr;
-  }
-
-  /**
    * Generate Cassandra key in the form of entity values joined by #.
    *
    * @param entityRow Single EntityRow representation in feature retrieval call
    * @param entityNames List of entities related to feature references in retrieval call
    * @return Cassandra key for retrieval
    */
-  private ByteBuffer convertEntityValueToCassandraKey(
+  private ByteBuffer convertEntityValueToKey(
       ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow entityRow, List<String> entityNames) {
     return ByteBuffer.wrap(
         entityNames.stream()
@@ -109,20 +68,6 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
             .map(this::valueToString)
             .collect(Collectors.joining("#"))
             .getBytes());
-  }
-
-  /**
-   * Retrieve Cassandra table column families based on FeatureTable names.
-   *
-   * @param featureReferences List of feature references of features in retrieval call
-   * @return List of String of FeatureTable names
-   */
-  private List<String> getColumnFamilies(
-      List<ServingAPIProto.FeatureReferenceV2> featureReferences) {
-    return featureReferences.stream()
-        .map(ServingAPIProto.FeatureReferenceV2::getFeatureTable)
-        .distinct()
-        .collect(Collectors.toList());
   }
 
   private List<Feature> decodeFeatures(
@@ -180,7 +125,7 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
 
     List<ByteBuffer> rowKeys =
         entityRows.stream()
-            .map(row -> convertEntityValueToCassandraKey(row, entityNames))
+            .map(row -> convertEntityValueToKey(row, entityNames))
             .collect(Collectors.toList());
 
     Map<ByteBuffer, Row> rowsFromCassandra =

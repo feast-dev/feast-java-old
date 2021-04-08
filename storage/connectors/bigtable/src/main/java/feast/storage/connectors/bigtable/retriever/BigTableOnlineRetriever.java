@@ -25,10 +25,10 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Timestamp;
 import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow;
-import feast.proto.types.ValueProto;
 import feast.storage.api.retriever.Feature;
 import feast.storage.api.retriever.NativeFeature;
 import feast.storage.api.retriever.OnlineRetrieverV2;
+import feast.storage.api.retriever.StorageRetriever;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Function;
@@ -39,7 +39,7 @@ import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.*;
 
-public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
+public class BigTableOnlineRetriever extends StorageRetriever implements OnlineRetrieverV2 {
 
   private BigtableDataClient client;
   private BigTableSchemaRegistry schemaRegistry;
@@ -50,75 +50,19 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
   }
 
   /**
-   * Generate name of BigTable table in the form of <feastProject>__<entityNames>
-   *
-   * @param project Name of Feast project
-   * @param entityNames List of entities used in retrieval call
-   * @return Name of BigTable table
-   */
-  private String getTableName(String project, List<String> entityNames) {
-    String tableName =
-        String.format("%s__%s", project, entityNames.stream().collect(Collectors.joining("__")));
-
-    return tableName;
-  }
-
-  /**
-   * Convert Entity value from Feast valueType to String type. Currently only supports STRING_VAL,
-   * INT64_VAL, INT32_VAL and BYTES_VAL.
-   *
-   * @param v Entity value of Feast valueType
-   * @return String representation of Entity value
-   */
-  private String valueToString(ValueProto.Value v) {
-    String stringRepr;
-    switch (v.getValCase()) {
-      case STRING_VAL:
-        stringRepr = v.getStringVal();
-        break;
-      case INT64_VAL:
-        stringRepr = String.valueOf(v.getInt64Val());
-        break;
-      case INT32_VAL:
-        stringRepr = String.valueOf(v.getInt32Val());
-        break;
-      case BYTES_VAL:
-        stringRepr = v.getBytesVal().toString();
-        break;
-      default:
-        throw new RuntimeException("Type is not supported to be entity");
-    }
-
-    return stringRepr;
-  }
-
-  /**
    * Generate BigTable key in the form of entity values joined by #.
    *
    * @param entityRow Single EntityRow representation in feature retrieval call
    * @param entityNames List of entities related to feature references in retrieval call
    * @return BigTable key for retrieval
    */
-  private ByteString convertEntityValueToBigTableKey(
-      EntityRow entityRow, List<String> entityNames) {
+  private ByteString convertEntityValueToKey(EntityRow entityRow, List<String> entityNames) {
     return ByteString.copyFrom(
         entityNames.stream()
             .map(entity -> entityRow.getFieldsMap().get(entity))
             .map(this::valueToString)
             .collect(Collectors.joining("#"))
             .getBytes());
-  }
-
-  /**
-   * Retrieve BigTable table column families based on FeatureTable names.
-   *
-   * @param featureReferences List of feature references of features in retrieval call
-   * @return List of String of FeatureTable names
-   */
-  private List<String> getColumnFamilies(List<FeatureReferenceV2> featureReferences) {
-    return featureReferences.stream()
-        .map(FeatureReferenceV2::getFeatureTable)
-        .collect(Collectors.toList());
   }
 
   /**
@@ -187,7 +131,7 @@ public class BigTableOnlineRetriever implements OnlineRetrieverV2 {
 
     List<ByteString> rowKeys =
         entityRows.stream()
-            .map(row -> convertEntityValueToBigTableKey(row, entityNames))
+            .map(row -> convertEntityValueToKey(row, entityNames))
             .collect(Collectors.toList());
     Map<ByteString, Row> rowsFromBigTable =
         getFeaturesFromBigTable(tableName, rowKeys, columnFamilies);
