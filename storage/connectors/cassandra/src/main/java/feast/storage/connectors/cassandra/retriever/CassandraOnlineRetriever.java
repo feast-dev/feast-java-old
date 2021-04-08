@@ -34,11 +34,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.avro.AvroRuntimeException;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.BinaryDecoder;
-import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 
 public class CassandraOnlineRetriever implements OnlineRetrieverV2 {

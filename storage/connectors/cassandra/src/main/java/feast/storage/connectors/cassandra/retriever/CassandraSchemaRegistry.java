@@ -68,7 +68,8 @@ public class CassandraSchemaRegistry {
   public CassandraSchemaRegistry(CqlSession session) {
     this.session = session;
 
-    CacheLoader<SchemaReference, GenericDatumReader<GenericRecord>> schemaCacheLoader = CacheLoader.from(this::loadReader);
+    CacheLoader<SchemaReference, GenericDatumReader<GenericRecord>> schemaCacheLoader =
+        CacheLoader.from(this::loadReader);
 
     cache = CacheBuilder.newBuilder().build(schemaCacheLoader);
   }
@@ -95,8 +96,9 @@ public class CassandraSchemaRegistry {
 
     Row row = session.execute(statement).one();
 
-    Schema schema = new Schema.Parser()
-        .parse(StandardCharsets.UTF_8.decode(row.getByteBuffer(SCHEMA_COLUMN)).toString());
+    Schema schema =
+        new Schema.Parser()
+            .parse(StandardCharsets.UTF_8.decode(row.getByteBuffer(SCHEMA_COLUMN)).toString());
     return new GenericDatumReader<>(schema);
   }
 }
