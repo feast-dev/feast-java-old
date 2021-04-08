@@ -37,6 +37,7 @@ import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 
@@ -130,6 +131,7 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
       ByteBuffer schemaRefKey,
       ByteBuffer value,
       List<ServingAPIProto.FeatureReferenceV2> featureReferences,
+      BinaryDecoder reusedDecoder,
       long timestamp)
       throws IOException {
 
@@ -139,10 +141,9 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
     // Convert ByteBuffer to ByteArray
     byte[] bytesArray = new byte[value.remaining()];
     value.get(bytesArray, 0, bytesArray.length);
-    Schema schema = schemaRegistry.getSchema(schemaReference);
-    GenericDatumReader<GenericRecord> reader = new GenericDatumReader<>(schema);
-    Decoder decoder = DecoderFactory.get().binaryDecoder(bytesArray, null);
-    GenericRecord record = reader.read(null, decoder);
+    GenericDatumReader<GenericRecord> reader = schemaRegistry.getReader(schemaReference);
+    reusedDecoder = DecoderFactory.get().binaryDecoder(bytesArray, reusedDecoder);
+    GenericRecord record = reader.read(null, reusedDecoder);
 
     return featureReferences.stream()
         .map(
@@ -232,6 +233,8 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
       Map<ByteBuffer, Row> rows,
       List<ServingAPIProto.FeatureReferenceV2> featureReferences) {
 
+    BinaryDecoder reusedDecoder = DecoderFactory.get().binaryDecoder(new byte[0], null);
+
     return rowKeys.stream()
         .map(
             rowKey -> {
@@ -265,6 +268,7 @@ public class CassandraOnlineRetriever implements OnlineRetrieverV2 {
                                     schemaRefKey,
                                     featureValues,
                                     localFeatureReferences,
+                                    reusedDecoder,
                                     row.getLong(featureTableColumn + EVENT_TIMESTAMP_SUFFIX));
                           } catch (IOException e) {
                             throw new RuntimeException("Failed to decode features from Cassandra");

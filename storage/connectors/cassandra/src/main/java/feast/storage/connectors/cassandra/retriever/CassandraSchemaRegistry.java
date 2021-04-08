@@ -26,12 +26,15 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumReader;
+import org.apache.avro.generic.GenericRecord;
 
 public class CassandraSchemaRegistry {
   private final CqlSession session;
-  private final LoadingCache<SchemaReference, Schema> cache;
+  private final LoadingCache<SchemaReference, GenericDatumReader<GenericRecord>> cache;
 
   private static String SCHEMA_REF_TABLE = "feast_schema_reference";
   private static String SCHEMA_REF_COLUMN = "schema_ref";
@@ -47,27 +50,40 @@ public class CassandraSchemaRegistry {
     public ByteBuffer getSchemaHash() {
       return schemaHash;
     }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      SchemaReference that = (SchemaReference) o;
+      return Objects.equals(schemaHash, that.schemaHash);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(schemaHash);
+    }
   }
 
   public CassandraSchemaRegistry(CqlSession session) {
     this.session = session;
 
-    CacheLoader<SchemaReference, Schema> schemaCacheLoader = CacheLoader.from(this::loadSchema);
+    CacheLoader<SchemaReference, GenericDatumReader<GenericRecord>> schemaCacheLoader = CacheLoader.from(this::loadReader);
 
     cache = CacheBuilder.newBuilder().build(schemaCacheLoader);
   }
 
-  public Schema getSchema(SchemaReference reference) {
-    Schema schema;
+  public GenericDatumReader<GenericRecord> getReader(SchemaReference reference) {
+    GenericDatumReader<GenericRecord> reader;
     try {
-      schema = this.cache.get(reference);
+      reader = this.cache.get(reference);
     } catch (ExecutionException | CacheLoader.InvalidCacheLoadException e) {
-      throw new RuntimeException(String.format("Unable to find Schema"), e);
+      throw new RuntimeException("Unable to find Schema");
     }
-    return schema;
+    return reader;
   }
 
-  private Schema loadSchema(SchemaReference reference) {
+  private GenericDatumReader<GenericRecord> loadReader(SchemaReference reference) {
     String tableName = String.format("\"%s\"", SCHEMA_REF_TABLE);
     Select query =
         QueryBuilder.selectFrom(tableName)
@@ -79,7 +95,8 @@ public class CassandraSchemaRegistry {
 
     Row row = session.execute(statement).one();
 
-    return new Schema.Parser()
+    Schema schema = new Schema.Parser()
         .parse(StandardCharsets.UTF_8.decode(row.getByteBuffer(SCHEMA_COLUMN)).toString());
+    return new GenericDatumReader<>(schema);
   }
 }
