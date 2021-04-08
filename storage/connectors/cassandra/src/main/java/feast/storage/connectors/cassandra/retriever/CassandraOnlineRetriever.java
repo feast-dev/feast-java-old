@@ -184,6 +184,10 @@ public class CassandraOnlineRetriever implements SSTableOnlineRetriever<ByteBuff
       long timestamp)
       throws IOException {
 
+    if (value == null || schemaRefKey == null) {
+      return Collections.emptyList();
+    }
+
     CassandraSchemaRegistry.SchemaReference schemaReference =
         new CassandraSchemaRegistry.SchemaReference(schemaRefKey);
 
