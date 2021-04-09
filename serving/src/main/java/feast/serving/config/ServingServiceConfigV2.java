@@ -16,6 +16,8 @@
  */
 package feast.serving.config;
 
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.google.cloud.bigtable.data.v2.BigtableDataClient;
 import com.google.cloud.bigtable.data.v2.BigtableDataSettings;
 import feast.serving.service.OnlineServingServiceV2;
@@ -24,9 +26,15 @@ import feast.serving.specs.CachedSpecService;
 import feast.storage.api.retriever.OnlineRetrieverV2;
 import feast.storage.connectors.bigtable.retriever.BigTableOnlineRetriever;
 import feast.storage.connectors.bigtable.retriever.BigTableStoreConfig;
+import feast.storage.connectors.cassandra.retriever.CassandraOnlineRetriever;
+import feast.storage.connectors.cassandra.retriever.CassandraStoreConfig;
 import feast.storage.connectors.redis.retriever.*;
 import io.opentracing.Tracer;
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -76,6 +84,32 @@ public class ServingServiceConfigV2 {
         BigtableDataClient bigtableClient = context.getBean(BigtableDataClient.class);
         OnlineRetrieverV2 bigtableRetriever = new BigTableOnlineRetriever(bigtableClient);
         servingService = new OnlineServingServiceV2(bigtableRetriever, specService, tracer);
+        break;
+      case CASSANDRA:
+        CassandraStoreConfig config = feastProperties.getActiveStore().getCassandraConfig();
+        String connectionString = config.getConnectionString();
+        String dataCenter = config.getDataCenter();
+        String keySpace = config.getKeySpace();
+
+        List<InetSocketAddress> contactPoints =
+            Arrays.stream(connectionString.split(","))
+                .map(String::trim)
+                .map(cs -> cs.split(":"))
+                .map(
+                    hostPort -> {
+                      int port = hostPort.length > 1 ? Integer.parseInt(hostPort[1]) : 9042;
+                      return new InetSocketAddress(hostPort[0], port);
+                    })
+                .collect(Collectors.toList());
+
+        CqlSession session =
+            new CqlSessionBuilder()
+                .addContactPoints(contactPoints)
+                .withLocalDatacenter(dataCenter)
+                .withKeyspace(keySpace)
+                .build();
+        OnlineRetrieverV2 cassandraRetriever = new CassandraOnlineRetriever(session);
+        servingService = new OnlineServingServiceV2(cassandraRetriever, specService, tracer);
         break;
     }
 

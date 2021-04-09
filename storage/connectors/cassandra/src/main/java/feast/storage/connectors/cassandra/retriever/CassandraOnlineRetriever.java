@@ -14,14 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package feast.storage.connectors.bigtable.retriever;
+package feast.storage.connectors.cassandra.retriever;
 
-import com.google.cloud.bigtable.data.v2.BigtableDataClient;
-import com.google.cloud.bigtable.data.v2.models.Filters;
-import com.google.cloud.bigtable.data.v2.models.Query;
-import com.google.cloud.bigtable.data.v2.models.Row;
-import com.google.cloud.bigtable.data.v2.models.RowCell;
-import com.google.protobuf.ByteString;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
+import com.datastax.oss.driver.api.querybuilder.select.Select;
 import com.google.protobuf.Timestamp;
 import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow;
@@ -29,6 +28,7 @@ import feast.storage.api.retriever.Feature;
 import feast.storage.api.retriever.NativeFeature;
 import feast.storage.connectors.sstable.retriever.SSTableOnlineRetriever;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -36,28 +36,33 @@ import java.util.stream.StreamSupport;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.*;
+import org.apache.avro.io.BinaryDecoder;
+import org.apache.avro.io.DecoderFactory;
 
-public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteString, Row> {
+public class CassandraOnlineRetriever implements SSTableOnlineRetriever<ByteBuffer, Row> {
 
-  private BigtableDataClient client;
-  private BigTableSchemaRegistry schemaRegistry;
+  private final CqlSession session;
+  private final CassandraSchemaRegistry schemaRegistry;
 
-  public BigTableOnlineRetriever(BigtableDataClient client) {
-    this.client = client;
-    this.schemaRegistry = new BigTableSchemaRegistry(client);
+  private static final String ENTITY_KEY = "key";
+  private static final String SCHEMA_REF_SUFFIX = "__schema_ref";
+  private static final String EVENT_TIMESTAMP_SUFFIX = "__event_timestamp";
+
+  public CassandraOnlineRetriever(CqlSession session) {
+    this.session = session;
+    this.schemaRegistry = new CassandraSchemaRegistry(session);
   }
 
   /**
-   * Generate BigTable key in the form of entity values joined by #.
+   * Generate Cassandra key in the form of entity values joined by #.
    *
    * @param entityRow Single EntityRow representation in feature retrieval call
    * @param entityNames List of entities related to feature references in retrieval call
-   * @return BigTable key for retrieval
+   * @return Cassandra key for retrieval
    */
   @Override
-  public ByteString convertEntityValueToKey(EntityRow entityRow, List<String> entityNames) {
-    return ByteString.copyFrom(
+  public ByteBuffer convertEntityValueToKey(EntityRow entityRow, List<String> entityNames) {
+    return ByteBuffer.wrap(
         entityNames.stream()
             .map(entity -> entityRow.getFieldsMap().get(entity))
             .map(this::valueToString)
@@ -66,9 +71,9 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteStrin
   }
 
   /**
-   * Converts rowCell feature value into @NativeFeature type.
+   * Converts Cassandra rows into @NativeFeature type.
    *
-   * @param tableName Name of BigTable table
+   * @param tableName Name of Cassandra table
    * @param rowKeys List of keys of rows to retrieve
    * @param rows Map of rowKey to Row related to it
    * @param featureReferences List of feature references
@@ -77,8 +82,8 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteStrin
   @Override
   public List<List<Feature>> convertRowToFeature(
       String tableName,
-      List<ByteString> rowKeys,
-      Map<ByteString, Row> rows,
+      List<ByteBuffer> rowKeys,
+      Map<ByteBuffer, Row> rows,
       List<FeatureReferenceV2> featureReferences) {
 
     BinaryDecoder reusedDecoder = DecoderFactory.get().binaryDecoder(new byte[0], null);
@@ -93,32 +98,33 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteStrin
                 return featureReferences.stream()
                     .map(FeatureReferenceV2::getFeatureTable)
                     .distinct()
-                    .map(cf -> row.getCells(cf, ""))
-                    .filter(ls -> !ls.isEmpty())
                     .flatMap(
-                        rowCells -> {
-                          RowCell rowCell = rowCells.get(0); // Latest cell
-                          String family = rowCell.getFamily();
-                          ByteString value = rowCell.getValue();
+                        featureTableColumn -> {
+                          ByteBuffer featureValues = row.getByteBuffer(featureTableColumn);
+                          ByteBuffer schemaRefKey =
+                              row.getByteBuffer(featureTableColumn + SCHEMA_REF_SUFFIX);
 
-                          List<Feature> features;
+                          // Prevent retrieval of features from incorrect FeatureTable
                           List<FeatureReferenceV2> localFeatureReferences =
                               featureReferences.stream()
                                   .filter(
                                       featureReference ->
-                                          featureReference.getFeatureTable().equals(family))
+                                          featureReference
+                                              .getFeatureTable()
+                                              .equals(featureTableColumn))
                                   .collect(Collectors.toList());
 
+                          List<Feature> features;
                           try {
                             features =
                                 decodeFeatures(
-                                    tableName,
-                                    value,
+                                    schemaRefKey,
+                                    featureValues,
                                     localFeatureReferences,
                                     reusedDecoder,
-                                    rowCell.getTimestamp());
+                                    row.getLong(featureTableColumn + EVENT_TIMESTAMP_SUFFIX));
                           } catch (IOException e) {
-                            throw new RuntimeException("Failed to decode features from BigTable");
+                            throw new RuntimeException("Failed to decode features from Cassandra");
                           }
 
                           return features.stream();
@@ -130,58 +136,66 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteStrin
   }
 
   /**
-   * Retrieve rows for each row entity key by generating BigTable rowQuery with filters based on
-   * column families.
+   * Retrieve rows for each row entity key by generating Cassandra Query with filters based on
+   * columns.
    *
-   * @param tableName Name of BigTable table
+   * @param tableName Name of Cassandra table
    * @param rowKeys List of keys of rows to retrieve
    * @param columnFamilies List of FeatureTable names
    * @return Map of retrieved features for each rowKey
    */
   @Override
-  public Map<ByteString, Row> getFeaturesFromSSTable(
-      String tableName, List<ByteString> rowKeys, List<String> columnFamilies) {
-    Query rowQuery = Query.create(tableName);
-    Filters.InterleaveFilter familyFilter = Filters.FILTERS.interleave();
-    columnFamilies.forEach(cf -> familyFilter.filter(Filters.FILTERS.family().exactMatch(cf)));
-
-    for (ByteString rowKey : rowKeys) {
-      rowQuery.rowKey(rowKey);
+  public Map<ByteBuffer, Row> getFeaturesFromSSTable(
+      String tableName, List<ByteBuffer> rowKeys, List<String> columnFamilies) {
+    List<String> schemaRefColumns =
+        columnFamilies.stream().map(c -> c + SCHEMA_REF_SUFFIX).collect(Collectors.toList());
+    Select query =
+        QueryBuilder.selectFrom(tableName)
+            .columns(columnFamilies)
+            .columns(schemaRefColumns)
+            .column(ENTITY_KEY);
+    for (String columnFamily : columnFamilies) {
+      query = query.writeTime(columnFamily).as(columnFamily + EVENT_TIMESTAMP_SUFFIX);
     }
+    query = query.whereColumn(ENTITY_KEY).in(QueryBuilder.bindMarker());
 
-    return StreamSupport.stream(client.readRows(rowQuery).spliterator(), false)
-        .collect(Collectors.toMap(Row::getKey, Function.identity()));
+    BoundStatement statement = session.prepare(query.build()).bind(rowKeys);
+
+    return StreamSupport.stream(session.execute(statement).spliterator(), false)
+        .collect(Collectors.toMap((Row row) -> row.getByteBuffer(ENTITY_KEY), Function.identity()));
   }
 
   /**
-   * AvroRuntimeException is thrown if feature name does not exist in avro schema. Empty Object is
-   * returned when null is retrieved from BigTable RowCell.
+   * AvroRuntimeException is thrown if feature name does not exist in avro schema.
    *
-   * @param tableName Name of BigTable table
-   * @param value Value of BigTable cell where first 4 bytes represent the schema reference and
-   *     remaining bytes represent avro-serialized features
+   * @param schemaRefKey Schema reference key
+   * @param value Value of Cassandra cell where bytes represent avro-serialized features
    * @param featureReferences List of feature references
    * @param reusedDecoder Decoder for decoding feature values
    * @param timestamp Timestamp of rowCell
-   * @return @NativeFeature with retrieved value stored in BigTable RowCell
+   * @return @NativeFeature with retrieved value stored in Cassandra cell
    * @throws IOException
    */
   private List<Feature> decodeFeatures(
-      String tableName,
-      ByteString value,
+      ByteBuffer schemaRefKey,
+      ByteBuffer value,
       List<FeatureReferenceV2> featureReferences,
       BinaryDecoder reusedDecoder,
       long timestamp)
       throws IOException {
-    ByteString schemaReferenceBytes = value.substring(0, 4);
-    byte[] featureValueBytes = value.substring(4).toByteArray();
 
-    BigTableSchemaRegistry.SchemaReference schemaReference =
-        new BigTableSchemaRegistry.SchemaReference(tableName, schemaReferenceBytes);
+    if (value == null || schemaRefKey == null) {
+      return Collections.emptyList();
+    }
 
+    CassandraSchemaRegistry.SchemaReference schemaReference =
+        new CassandraSchemaRegistry.SchemaReference(schemaRefKey);
+
+    // Convert ByteBuffer to ByteArray
+    byte[] bytesArray = new byte[value.remaining()];
+    value.get(bytesArray, 0, bytesArray.length);
     GenericDatumReader<GenericRecord> reader = schemaRegistry.getReader(schemaReference);
-
-    reusedDecoder = DecoderFactory.get().binaryDecoder(featureValueBytes, reusedDecoder);
+    reusedDecoder = DecoderFactory.get().binaryDecoder(bytesArray, reusedDecoder);
     GenericRecord record = reader.read(null, reusedDecoder);
 
     return featureReferences.stream()

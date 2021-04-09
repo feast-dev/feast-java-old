@@ -3,13 +3,13 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
-        <groupId>dev.feast</groupId>
         <artifactId>feast-storage-connectors</artifactId>
+        <groupId>dev.feast</groupId>
         <version>${revision}</version>
     </parent>
 
     <modelVersion>4.0.0</modelVersion>
-    <artifactId>feast-storage-connector-bigtable</artifactId>
+    <artifactId>feast-storage-connector-cassandra</artifactId>
 
     <properties>
         <maven.compiler.source>11</maven.compiler.source>
@@ -17,13 +17,6 @@
     </properties>
 
     <dependencies>
-        <dependency>
-            <groupId>com.google.cloud</groupId>
-            <artifactId>google-cloud-bigtable</artifactId>
-            <version>1.21.2</version>
-        </dependency>
-
-        <!-- https://mvnrepository.com/artifact/org.apache.avro/avro -->
         <dependency>
             <groupId>org.apache.avro</groupId>
             <artifactId>avro</artifactId>
@@ -37,8 +30,15 @@
         </dependency>
 
         <dependency>
-            <groupId>com.google.guava</groupId>
-            <artifactId>guava</artifactId>
+            <groupId>com.datastax.oss</groupId>
+            <artifactId>java-driver-core</artifactId>
+            <version>4.11.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.datastax.oss</groupId>
+            <artifactId>java-driver-query-builder</artifactId>
+            <version>4.11.0</version>
         </dependency>
     </dependencies>
 
