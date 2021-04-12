@@ -18,6 +18,7 @@ package feast.storage.connectors.cassandra.retriever;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
@@ -34,6 +35,7 @@ import org.apache.avro.generic.GenericRecord;
 
 public class CassandraSchemaRegistry {
   private final CqlSession session;
+  private final PreparedStatement preparedStatement;
   private final LoadingCache<SchemaReference, GenericDatumReader<GenericRecord>> cache;
 
   private static String SCHEMA_REF_TABLE = "feast_schema_reference";
@@ -67,6 +69,13 @@ public class CassandraSchemaRegistry {
 
   public CassandraSchemaRegistry(CqlSession session) {
     this.session = session;
+    String tableName = String.format("\"%s\"", SCHEMA_REF_TABLE);
+    Select query =
+        QueryBuilder.selectFrom(tableName)
+            .column(SCHEMA_COLUMN)
+            .whereColumn(SCHEMA_REF_COLUMN)
+            .isEqualTo(QueryBuilder.bindMarker());
+    this.preparedStatement = session.prepare(query.build());
 
     CacheLoader<SchemaReference, GenericDatumReader<GenericRecord>> schemaCacheLoader =
         CacheLoader.from(this::loadReader);
@@ -85,14 +94,7 @@ public class CassandraSchemaRegistry {
   }
 
   private GenericDatumReader<GenericRecord> loadReader(SchemaReference reference) {
-    String tableName = String.format("\"%s\"", SCHEMA_REF_TABLE);
-    Select query =
-        QueryBuilder.selectFrom(tableName)
-            .column(SCHEMA_COLUMN)
-            .whereColumn(SCHEMA_REF_COLUMN)
-            .isEqualTo(QueryBuilder.bindMarker());
-
-    BoundStatement statement = session.prepare(query.build()).bind(reference.getSchemaHash());
+    BoundStatement statement = preparedStatement.bind(reference.getSchemaHash());
 
     Row row = session.execute(statement).one();
 
