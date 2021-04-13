@@ -16,8 +16,10 @@
  */
 package feast.storage.connectors.cassandra.retriever;
 
+import com.datastax.oss.driver.api.core.AsyncPagingIterable;
 import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
@@ -30,9 +32,11 @@ import feast.storage.connectors.sstable.retriever.SSTableOnlineRetriever;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
@@ -157,12 +161,40 @@ public class CassandraOnlineRetriever implements SSTableOnlineRetriever<ByteBuff
     for (String columnFamily : columnFamilies) {
       query = query.writeTime(columnFamily).as(columnFamily + EVENT_TIMESTAMP_SUFFIX);
     }
-    query = query.whereColumn(ENTITY_KEY).in(QueryBuilder.bindMarker());
+    query = query.whereColumn(ENTITY_KEY).isEqualTo(QueryBuilder.bindMarker());
 
-    BoundStatement statement = session.prepare(query.build()).bind(rowKeys);
+    PreparedStatement preparedStatement = session.prepare(query.build());
 
-    return StreamSupport.stream(session.execute(statement).spliterator(), false)
-        .collect(Collectors.toMap((Row row) -> row.getByteBuffer(ENTITY_KEY), Function.identity()));
+    List<CompletableFuture<AsyncResultSet>> completableAsyncResultSets =
+        rowKeys.stream()
+            .map(preparedStatement::bind)
+            .map(session::executeAsync)
+            .map(CompletionStage::toCompletableFuture)
+            .collect(Collectors.toList());
+
+    CompletableFuture<Void> allResultComputed =
+        CompletableFuture.allOf(completableAsyncResultSets.toArray(new CompletableFuture[0]));
+
+    Map<ByteBuffer, Row> resultMap;
+    try {
+      resultMap =
+          allResultComputed
+              .thenApply(
+                  v ->
+                      completableAsyncResultSets.stream()
+                          .map(CompletableFuture::join)
+                          .filter(result -> result.remaining() != 0)
+                          .map(AsyncPagingIterable::one)
+                          .filter(Objects::nonNull)
+                          .collect(
+                              Collectors.toMap(
+                                  (Row row) -> row.getByteBuffer(ENTITY_KEY), Function.identity())))
+              .get();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new RuntimeException(e.getMessage());
+    }
+
+    return resultMap;
   }
 
   /**
