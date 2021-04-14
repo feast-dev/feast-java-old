@@ -47,6 +47,7 @@ import io.grpc.ManagedChannelBuilder;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -54,10 +55,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.avro.io.*;
+import org.apache.avro.io.Encoder;
+import org.apache.avro.io.EncoderFactory;
 import org.junit.ClassRule;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -140,9 +143,6 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
             + ":"
             + environment.getServicePort("bigtable_1", BIGTABLE_PORT);
     channel = ManagedChannelBuilder.forTarget(endpoint).usePlaintext().build();
-    TransportChannelProvider channelProvider =
-        FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel));
-    NoCredentialsProvider credentialsProvider = NoCredentialsProvider.create();
 
     /** Feast resource creation Workflow */
     String projectName = "default";
@@ -209,9 +209,6 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     ImmutableList<String> columnFamilies = ImmutableList.of(featureTableName, metadataColumnFamily);
     ImmutableList<String> compoundColumnFamilies =
         ImmutableList.of(rideMerchantFeatureTableName, metadataColumnFamily);
-
-    createTable(channelProvider, credentialsProvider, btTableName, columnFamilies);
-    createTable(channelProvider, credentialsProvider, compoundBtTableName, compoundColumnFamilies);
 
     /** Single Entity Ingestion Workflow */
     Schema ftSchema =
@@ -319,7 +316,9 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
       for (String columnFamily : columnFamilies) {
         createTableRequest.addFamily(columnFamily);
       }
-      client.createTable(createTableRequest);
+      if (!client.exists(tableName)) {
+        client.createTable(createTableRequest);
+      }
     }
   }
 
@@ -348,16 +347,30 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     return entityFeatureValue;
   }
 
+  private static byte[] schemaReference(Schema schema) {
+    return Hashing.murmur3_32().hashBytes(schema.toString().getBytes()).asBytes();
+  }
+
   private static void ingestData(
       String featureTableName,
       String btTableName,
       byte[] btEntityFeatureKey,
       byte[] btEntityFeatureValue,
       byte[] btSchemaKey,
-      Schema btSchema) {
+      Schema btSchema)
+      throws IOException {
     String emptyQualifier = "";
     String avroQualifier = "avro";
     String metadataColumnFamily = "metadata";
+
+    TransportChannelProvider channelProvider =
+        FixedTransportChannelProvider.create(GrpcTransportChannel.create(channel));
+    NoCredentialsProvider credentialsProvider = NoCredentialsProvider.create();
+    createTable(
+        channelProvider,
+        credentialsProvider,
+        btTableName,
+        ImmutableList.of(featureTableName, metadataColumnFamily));
 
     // Update Compound Entity-Feature Row
     client.mutateRow(
@@ -599,6 +612,118 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
         ImmutableList.of(expectedFieldValues, expectedFieldValues2);
 
     assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
+  }
+
+  @Test
+  public void shouldSupportAllFeastTypes() throws IOException {
+    EntityProto.EntitySpecV2 entitySpec =
+        EntityProto.EntitySpecV2.newBuilder()
+            .setName("entity")
+            .setDescription("")
+            .setValueType(ValueProto.ValueType.Enum.STRING)
+            .build();
+    TestUtils.applyEntity(coreClient, "default", entitySpec);
+
+    ImmutableMap<String, ValueProto.ValueType.Enum> allTypesFeatures =
+        new ImmutableMap.Builder<String, ValueProto.ValueType.Enum>()
+            .put("f_int64", ValueProto.ValueType.Enum.INT64)
+            .put("f_int32", ValueProto.ValueType.Enum.INT32)
+            .put("f_float", ValueProto.ValueType.Enum.FLOAT)
+            .put("f_double", ValueProto.ValueType.Enum.DOUBLE)
+            .put("f_string", ValueProto.ValueType.Enum.STRING)
+            .put("f_bytes", ValueProto.ValueType.Enum.BYTES)
+            .put("f_bool", ValueProto.ValueType.Enum.BOOL)
+            .put("f_int64_list", ValueProto.ValueType.Enum.INT64_LIST)
+            .put("f_int32_list", ValueProto.ValueType.Enum.INT32_LIST)
+            .put("f_float_list", ValueProto.ValueType.Enum.FLOAT_LIST)
+            .put("f_double_list", ValueProto.ValueType.Enum.DOUBLE_LIST)
+            .put("f_string_list", ValueProto.ValueType.Enum.STRING_LIST)
+            .put("f_bytes_list", ValueProto.ValueType.Enum.BYTES_LIST)
+            .put("f_bool_list", ValueProto.ValueType.Enum.BOOL_LIST)
+            .build();
+
+    TestUtils.applyFeatureTable(
+        coreClient, "default", "all_types", ImmutableList.of("entity"), allTypesFeatures, 7200);
+
+    Schema schema =
+        SchemaBuilder.record("AllTypesRecord")
+            .namespace("")
+            .fields()
+            .requiredLong("f_int64")
+            .requiredInt("f_int32")
+            .requiredFloat("f_float")
+            .requiredDouble("f_double")
+            .requiredString("f_string")
+            .requiredBytes("f_bytes")
+            .requiredBoolean("f_bool")
+            .name("f_int64_list")
+            .type(SchemaBuilder.array().items(SchemaBuilder.builder().longType()))
+            .noDefault()
+            .name("f_int32_list")
+            .type(SchemaBuilder.array().items(SchemaBuilder.builder().intType()))
+            .noDefault()
+            .name("f_float_list")
+            .type(SchemaBuilder.array().items(SchemaBuilder.builder().floatType()))
+            .noDefault()
+            .name("f_double_list")
+            .type(SchemaBuilder.array().items(SchemaBuilder.builder().doubleType()))
+            .noDefault()
+            .name("f_string_list")
+            .type(SchemaBuilder.array().items(SchemaBuilder.builder().stringType()))
+            .noDefault()
+            .name("f_bytes_list")
+            .type(SchemaBuilder.array().items(SchemaBuilder.builder().bytesType()))
+            .noDefault()
+            .name("f_bool_list")
+            .type(SchemaBuilder.array().items(SchemaBuilder.builder().booleanType()))
+            .noDefault()
+            .endRecord();
+
+    GenericData.Record record =
+        new GenericRecordBuilder(schema)
+            .set("f_int64", 10L)
+            .set("f_int32", 10)
+            .set("f_float", 10.0)
+            .set("f_double", 10.0D)
+            .set("f_string", "test")
+            .set("f_bytes", ByteBuffer.wrap("test".getBytes()))
+            .set("f_bool", true)
+            .set("f_int64_list", ImmutableList.of(10L))
+            .set("f_int32_list", ImmutableList.of(10))
+            .set("f_float_list", ImmutableList.of(10.0))
+            .set("f_double_list", ImmutableList.of(10.0D))
+            .set("f_string_list", ImmutableList.of("test"))
+            .set("f_bytes_list", ImmutableList.of(ByteBuffer.wrap("test".getBytes())))
+            .set("f_bool_list", ImmutableList.of(true))
+            .build();
+
+    ValueProto.Value entity = DataGenerator.createStrValue("key");
+
+    ingestData(
+        "all_types",
+        "default__entity",
+        entity.getStringVal().getBytes(),
+        createEntityValue(schema, schemaReference(schema), record),
+        createSchemaKey(schemaReference(schema)),
+        schema);
+
+    GetOnlineFeaturesRequestV2 onlineFeatureRequest =
+        TestUtils.createOnlineFeatureRequest(
+            "default",
+            allTypesFeatures.keySet().stream()
+                .map(
+                    f ->
+                        FeatureReferenceV2.newBuilder()
+                            .setFeatureTable("all_types")
+                            .setName(f)
+                            .build())
+                .collect(Collectors.toList()),
+            ImmutableList.of(DataGenerator.createEntityRow("entity", entity, 100)));
+    GetOnlineFeaturesResponse featureResponse =
+        servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
+
+    assert featureResponse.getFieldValues(0).getStatusesMap().values().stream()
+        .allMatch(status -> status.equals(GetOnlineFeaturesResponse.FieldStatus.PRESENT));
   }
 
   @TestConfiguration

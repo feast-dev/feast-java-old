@@ -25,8 +25,8 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Timestamp;
 import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow;
+import feast.storage.api.retriever.AvroFeature;
 import feast.storage.api.retriever.Feature;
-import feast.storage.api.retriever.NativeFeature;
 import feast.storage.connectors.sstable.retriever.SSTableOnlineRetriever;
 import java.io.IOException;
 import java.util.*;
@@ -195,12 +195,12 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteStrin
                 return null;
               }
               if (featureValue != null) {
-                return new NativeFeature(
+                return new AvroFeature(
                     featureReference,
                     Timestamp.newBuilder().setSeconds(timestamp / 1000).build(),
                     featureValue);
               }
-              return new NativeFeature(
+              return new AvroFeature(
                   featureReference,
                   Timestamp.newBuilder().setSeconds(timestamp / 1000).build(),
                   new Object());
