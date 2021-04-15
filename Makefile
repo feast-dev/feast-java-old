@@ -15,7 +15,7 @@
 #
 
 ROOT_DIR 	:= $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-MVN := mvn ${MAVEN_EXTRA_OPTS}
+MVN := ./mvnw ${MAVEN_EXTRA_OPTS}
 
 # General
 

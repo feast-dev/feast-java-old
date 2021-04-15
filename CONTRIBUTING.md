@@ -30,7 +30,7 @@ Automatically format the code to conform the style guide by:
 
 ```sh
 # formats all code in the feast-java repository
-mvn spotless:apply
+./mvnw spotless:apply
 ```
 
 > If you're using IntelliJ, you can import these [code style settings](https://github.com/google/styleguide/blob/gh-pages/intellij-java-google-style.xml)
@@ -78,7 +78,7 @@ Feast Core is configured using it's [application.yml](https://docs.feast.dev/ref
 ### Building and Running
 1. Build / Compile Feast Core with Maven to produce an executable Feast Core JAR
 ```sh
-mvn package -pl core --also-make -Dmaven.test.skip=true 
+./mvnw package -pl core --also-make -Dmaven.test.skip=true 
 ```
 
 2. Run Feast Core using the built JAR:
@@ -91,9 +91,9 @@ java -jar core/target/feast-core-X.X.X-exec.jar
 Unit &amp; Integration Tests can be used to verify functionality:
 ```sh
 # run unit tests
-mvn test -pl core --also-make
+./mvnw test -pl core --also-make
 # run integration tests
-mvn verify -pl core --also-make
+./mvnw verify -pl core --also-make
 ```
 
 ## Feast Serving
@@ -115,7 +115,7 @@ Feast Serving is configured using it's [application.yml](https://docs.feast.dev/
 ### Building and Running
 1. Build / Compile Feast Serving with Maven to produce an executable Feast Serving JAR
 ```sh
-mvn package -pl serving --also-make -Dmaven.test.skip=true 
+./mvnw package -pl serving --also-make -Dmaven.test.skip=true 
 
 2. Run Feast Serving using the built JAR:
 ```sh
@@ -127,9 +127,9 @@ java -jar serving/target/feast-serving-X.X.X-exec.jar
 Unit &amp; Integration Tests can be used to verify functionality:
 ```sh
 # run unit tests
-mvn test -pl serving --also-make
+./mvnw test -pl serving --also-make
 # run integration tests
-mvn verify -pl serving --also-make
+./mvnw verify -pl serving --also-make
 ```
 
 ## Feast Java Client
@@ -147,12 +147,12 @@ Feast Java Client is [configured as code](https://docs.feast.dev/v/master/refere
 1. Build / Compile Feast Java Client with Maven:
 
 ```sh
-mvn package -pl sdk/java --also-make -Dmaven.test.skip=true
+./mvnw package -pl sdk/java --also-make -Dmaven.test.skip=true
 ```
 
 ### Unit Tests
 Unit Tests can be used to verify functionality:
 
 ```sh
-mvn package -pl sdk/java test --also-make
+./mvnw package -pl sdk/java test --also-make
 ```
