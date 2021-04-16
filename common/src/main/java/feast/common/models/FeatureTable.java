@@ -25,6 +25,7 @@ public class FeatureTable {
    * Accepts FeatureTableSpec object and returns its reference in String
    * "project/featuretable_name".
    *
+   * @param project project name
    * @param featureTableSpec {@link FeatureTableSpec}
    * @return String format of FeatureTableReference
    */
@@ -36,6 +37,7 @@ public class FeatureTable {
    * Accepts FeatureReferenceV2 object and returns its reference in String
    * "project/featuretable_name".
    *
+   * @param project project name
    * @param featureReference {@link FeatureReferenceV2}
    * @return String format of FeatureTableReference
    */

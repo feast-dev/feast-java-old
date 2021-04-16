@@ -33,7 +33,7 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
    * Allows for custom web security rules to be applied.
    *
    * @param http {@link HttpSecurity} for configuring web based security
-   * @throws Exception
+   * @throws Exception exception
    */
   @Override
   protected void configure(HttpSecurity http) throws Exception {

@@ -29,7 +29,7 @@ public class OneOfStringValidator implements ConstraintValidator<OneOfStrings, S
   /**
    * Initialize the OneOfStringValidator with a collection of allowed String values.
    *
-   * @param constraintAnnotation
+   * @param constraintAnnotation constraint annotation
    */
   @Override
   public void initialize(OneOfStrings constraintAnnotation) {

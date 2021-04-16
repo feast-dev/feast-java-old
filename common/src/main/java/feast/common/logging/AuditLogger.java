@@ -65,6 +65,7 @@ public class AuditLogger {
   /**
    * Log the handling of a Protobuf message by a service call.
    *
+   * @param level log level
    * @param entryBuilder with all fields set except instance.
    */
   public static void logMessage(Level level, MessageAuditLogEntry.Builder entryBuilder) {

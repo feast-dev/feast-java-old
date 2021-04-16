@@ -87,6 +87,7 @@ public class DataSource {
    * @param spec Protobuf representation of DataSource to construct from.
    * @throws IllegalArgumentException when provided with a invalid Protobuf spec
    * @throws UnsupportedOperationException if source type is unsupported.
+   * @return data source
    */
   public static DataSource fromProto(DataSourceProto.DataSource spec) {
     DataSource source = new DataSource(spec.getType());
@@ -132,7 +133,11 @@ public class DataSource {
     return source;
   }
 
-  /** Convert this DataSource to its Protobuf representation. */
+  /**
+   * Convert this DataSource to its Protobuf representation.
+   *
+   * @return protobuf representation
+   */
   public DataSourceProto.DataSource toProto() {
     DataSourceProto.DataSource.Builder spec = DataSourceProto.DataSource.newBuilder();
     spec.setType(getType());

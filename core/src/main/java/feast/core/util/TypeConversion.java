@@ -79,7 +79,7 @@ public class TypeConversion {
   /**
    * Marshals a given map into its corresponding json string
    *
-   * @param map
+   * @param map map to be converted
    * @return json string corresponding to given map
    */
   public static String convertMapToJsonString(Map<String, String> map) {
@@ -89,7 +89,7 @@ public class TypeConversion {
   /**
    * Marshals a given Enum map into its corresponding json string
    *
-   * @param map
+   * @param map map to be converted
    * @return json string corresponding to given Enum map
    */
   public static String convertEnumMapToJsonString(Map<String, Enum> map) {

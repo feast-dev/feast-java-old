@@ -155,7 +155,9 @@ public class FeatureTable extends AbstractTimestampEntity {
   /**
    * Update the FeatureTable from the given Protobuf representation.
    *
+   * @param projectName project name
    * @param spec the Protobuf spec to update the FeatureTable from.
+   * @param entityRepo repository
    * @throws IllegalArgumentException if the update will make prohibited changes.
    */
   public void updateFromProto(
@@ -211,7 +213,11 @@ public class FeatureTable extends AbstractTimestampEntity {
     this.revision++;
   }
 
-  /** Convert this Feature Table to its Protobuf representation */
+  /**
+   * Convert this Feature Table to its Protobuf representation
+   *
+   * @return protobuf representation
+   */
   public FeatureTableProto.FeatureTable toProto() {
     // Convert field types to Protobuf compatible types
     Timestamp creationTime = TypeConversion.convertTimestamp(getCreated());
@@ -319,6 +325,7 @@ public class FeatureTable extends AbstractTimestampEntity {
   /**
    * Returns a list of Features if FeatureTable's Feature contains all labels in labelsFilter
    *
+   * @param features features
    * @param labelsFilter contain labels that should be attached to FeatureTable's features
    * @return List of Features
    */

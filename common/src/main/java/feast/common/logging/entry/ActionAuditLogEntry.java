@@ -21,10 +21,10 @@ import com.google.auto.value.AutoValue;
 /** ActionAuditLogEntry records an action being taken on a specific resource */
 @AutoValue
 public abstract class ActionAuditLogEntry extends AuditLogEntry {
-  /** The name of the action taken on the resource. */
+  /** @return The name of the action taken on the resource. */
   public abstract String getAction();
 
-  /** The target resource of which the action was taken on. */
+  /** @return The target resource of which the action was taken on. */
   public abstract LogResource getResource();
 
   /**
@@ -34,6 +34,7 @@ public abstract class ActionAuditLogEntry extends AuditLogEntry {
    * @param version The version of Feast producing this {@link AuditLogEntry}.
    * @param resource The target resource of which the action was taken on.
    * @param action The name of the action being taken on the given resource.
+   * @return log entry that records an action being taken on a specific resource
    */
   public static ActionAuditLogEntry of(
       String component, String version, LogResource resource, String action) {

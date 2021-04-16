@@ -34,8 +34,9 @@ public class RedisHashDecoder {
    *
    * @param redisHashValues retrieved Redis Hash values based on EntityRows
    * @param byteToFeatureReferenceMap map to decode bytes back to FeatureReference
+   * @param timestampPrefix timestamp prefix
    * @return List of {@link Feature}
-   * @throws InvalidProtocolBufferException
+   * @throws InvalidProtocolBufferException if a protocol buffer exception occurs
    */
   public static List<Feature> retrieveFeature(
       List<KeyValue<byte[], byte[]>> redisHashValues,

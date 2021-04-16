@@ -75,7 +75,11 @@ public class FeatureV2 {
     return new FeatureV2(table, spec.getName(), spec.getValueType(), labelsJSON);
   }
 
-  /** Convert this Feature to its Protobuf representation. */
+  /**
+   * Convert this Feature to its Protobuf representation.
+   *
+   * @return protobuf representation
+   */
   public FeatureSpecV2 toProto() {
     Map<String, String> labels = TypeConversion.convertJsonStringToMap(getLabelsJSON());
     return FeatureSpecV2.newBuilder()

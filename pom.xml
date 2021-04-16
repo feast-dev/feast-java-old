@@ -543,6 +543,9 @@
                         </goals>
                     </execution>
                 </executions>
+                <configuration>
+                    <excludePackageNames>feast.proto.*:io.grpc.*:org.tensorflow.*</excludePackageNames>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>

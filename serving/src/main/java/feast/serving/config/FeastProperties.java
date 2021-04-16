@@ -369,7 +369,11 @@ public class FeastProperties {
     return logging;
   }
 
-  /** Sets logging properties @@param logging the logging properties */
+  /**
+   * Sets logging properties
+   *
+   * @param logging the logging properties
+   */
   public void setLogging(LoggingProperties logging) {
     this.logging = logging;
   }

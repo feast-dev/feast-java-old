@@ -29,15 +29,27 @@ public abstract class AuditLogEntry {
 
   public final String application = "Feast";
 
-  /** The name of the Feast component producing this {@link AuditLogEntry} */
+  /**
+   * The name of the Feast component producing this {@link AuditLogEntry}
+   *
+   * @return the component
+   */
   public abstract String getComponent();
 
-  /** The version of Feast producing this {@link AuditLogEntry} */
+  /**
+   * The version of Feast producing this {@link AuditLogEntry}
+   *
+   * @return version
+   */
   public abstract String getVersion();
 
   public abstract AuditLogEntryKind getKind();
 
-  /** Return a structured JSON representation of this {@link AuditLogEntry} */
+  /**
+   * Return a structured JSON representation of this {@link AuditLogEntry}
+   *
+   * @return structured JSON representation
+   */
   public String toJSON() {
     Gson gson = new Gson();
     return gson.toJson(this);
