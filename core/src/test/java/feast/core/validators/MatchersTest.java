@@ -19,14 +19,12 @@ package feast.core.validators;
 import static feast.core.validators.Matchers.checkLowerSnakeCase;
 import static feast.core.validators.Matchers.checkUpperSnakeCase;
 import static feast.core.validators.Matchers.checkValidClassPath;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.google.common.base.Strings;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 public class MatchersTest {
-  @Rule public final ExpectedException exception = ExpectedException.none();
 
   @Test
   public void checkUpperSnakeCaseShouldPassForLegitUpperSnakeCase() {
@@ -42,15 +40,15 @@ public class MatchersTest {
 
   @Test
   public void checkUpperSnakeCaseShouldThrowIllegalArgumentExceptionWithFieldForInvalidString() {
-    exception.expect(IllegalArgumentException.class);
-    exception.expectMessage(
+    String in = "redis";
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> checkUpperSnakeCase(in, "featuretable"),
         Strings.lenientFormat(
             "invalid value for %s resource, %s: %s",
             "featuretable",
             "redis",
             "argument must be in upper snake case, and cannot include any special characters."));
-    String in = "redis";
-    checkUpperSnakeCase(in, "featuretable");
   }
 
   @Test
@@ -61,15 +59,15 @@ public class MatchersTest {
 
   @Test
   public void checkLowerSnakeCaseShouldThrowIllegalArgumentExceptionWithFieldForInvalidString() {
-    exception.expect(IllegalArgumentException.class);
-    exception.expectMessage(
+    String in = "Invalid_feature name";
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> checkLowerSnakeCase(in, "feature"),
         Strings.lenientFormat(
             "invalid value for %s resource, %s: %s",
             "feature",
             "Invalid_feature name",
             "argument must be in lower snake case, and cannot include any special characters."));
-    String in = "Invalid_feature name";
-    checkLowerSnakeCase(in, "feature");
   }
 
   @Test
@@ -80,13 +78,11 @@ public class MatchersTest {
 
   @Test
   public void checkValidClassPathEmpty() {
-    exception.expect(IllegalArgumentException.class);
-    checkValidClassPath("", "FeatureTable");
+    assertThrows(IllegalArgumentException.class, () -> checkValidClassPath("", "FeatureTable"));
   }
 
   @Test
   public void checkValidClassPathDigits() {
-    exception.expect(IllegalArgumentException.class);
-    checkValidClassPath("123", "FeatureTable");
+    assertThrows(IllegalArgumentException.class, () -> checkValidClassPath("123", "FeatureTable"));
   }
 }
