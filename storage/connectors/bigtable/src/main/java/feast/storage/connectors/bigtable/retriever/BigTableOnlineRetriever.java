@@ -42,6 +42,7 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteStrin
 
   private BigtableDataClient client;
   private BigTableSchemaRegistry schemaRegistry;
+  private static final int MAX_TABLE_NAME_LENGTH = 50;
 
   public BigTableOnlineRetriever(BigtableDataClient client) {
     this.client = client;
@@ -63,6 +64,19 @@ public class BigTableOnlineRetriever implements SSTableOnlineRetriever<ByteStrin
             .map(this::valueToString)
             .collect(Collectors.joining("#"))
             .getBytes());
+  }
+
+  /**
+   * Generate BigTable table name, with limit of 50 characters.
+   *
+   * @param project Name of Feast project
+   * @param entityNames List of entities used in retrieval call
+   * @return BigTable table name for retrieval
+   */
+  @Override
+  public String getSSTable(String project, List<String> entityNames) {
+    String tableName = String.format("%s__%s", project, String.join("__", entityNames));
+    return tableName.substring(0, Math.min(tableName.length(), MAX_TABLE_NAME_LENGTH));
   }
 
   /**

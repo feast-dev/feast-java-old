@@ -51,6 +51,7 @@ public class CassandraOnlineRetriever implements SSTableOnlineRetriever<ByteBuff
   private static final String ENTITY_KEY = "key";
   private static final String SCHEMA_REF_SUFFIX = "__schema_ref";
   private static final String EVENT_TIMESTAMP_SUFFIX = "__event_timestamp";
+  private static final int MAX_TABLE_NAME_LENGTH = 48;
 
   public CassandraOnlineRetriever(CqlSession session) {
     this.session = session;
@@ -72,6 +73,19 @@ public class CassandraOnlineRetriever implements SSTableOnlineRetriever<ByteBuff
             .map(this::valueToString)
             .collect(Collectors.joining("#"))
             .getBytes());
+  }
+
+  /**
+   * Generate Cassandra table name, with limit of 48 characters.
+   *
+   * @param project Name of Feast project
+   * @param entityNames List of entities used in retrieval call
+   * @return Cassandra table name for retrieval
+   */
+  @Override
+  public String getSSTable(String project, List<String> entityNames) {
+    String tableName = String.format("%s__%s", project, String.join("__", entityNames));
+    return tableName.substring(0, Math.min(tableName.length(), MAX_TABLE_NAME_LENGTH));
   }
 
   /**
