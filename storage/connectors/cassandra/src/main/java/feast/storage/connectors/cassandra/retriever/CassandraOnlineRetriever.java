@@ -85,7 +85,7 @@ public class CassandraOnlineRetriever implements SSTableOnlineRetriever<ByteBuff
   @Override
   public String getSSTable(String project, List<String> entityNames) {
     String tableName = String.format("%s__%s", project, String.join("__", entityNames));
-    return tableName.substring(0, Math.min(tableName.length(), MAX_TABLE_NAME_LENGTH));
+    return trimAndHash(tableName, MAX_TABLE_NAME_LENGTH);
   }
 
   /**

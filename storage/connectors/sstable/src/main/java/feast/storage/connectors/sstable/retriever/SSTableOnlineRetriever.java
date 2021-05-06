@@ -16,6 +16,7 @@
  */
 package feast.storage.connectors.sstable.retriever;
 
+import com.google.common.hash.Hashing;
 import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2.EntityRow;
 import feast.proto.types.ValueProto;
@@ -30,6 +31,8 @@ import java.util.stream.Collectors;
  * @param <V> Type of the SSTable row
  */
 public interface SSTableOnlineRetriever<K, V> extends OnlineRetrieverV2 {
+
+  int MAX_TABLE_NAME_LENGTH = 50;
 
   @Override
   default List<List<Feature>> getOnlineFeatures(
@@ -93,7 +96,8 @@ public interface SSTableOnlineRetriever<K, V> extends OnlineRetrieverV2 {
    * @return Name of Cassandra table
    */
   default String getSSTable(String project, List<String> entityNames) {
-    return String.format("%s__%s", project, String.join("__", entityNames));
+    return trimAndHash(
+        String.format("%s__%s", project, String.join("__", entityNames)), MAX_TABLE_NAME_LENGTH);
   }
 
   /**
@@ -136,5 +140,23 @@ public interface SSTableOnlineRetriever<K, V> extends OnlineRetrieverV2 {
         .map(FeatureReferenceV2::getFeatureTable)
         .distinct()
         .collect(Collectors.toList());
+  }
+
+  /**
+   * Trims long SSTable table names and appends hash suffix for uniqueness.
+   *
+   * @param expr Original SSTable table name
+   * @param maxLength Maximum length allowed for SSTable
+   * @return Hashed suffix SSTable table name
+   */
+  default String trimAndHash(String expr, int maxLength) {
+    int maxPrefixLength = 40;
+    String finalName = expr;
+    if (expr.length() > maxLength) {
+      String hashSuffix =
+          Hashing.murmur3_32().hashBytes(expr.substring(maxPrefixLength).getBytes()).toString();
+      finalName = expr.substring(0, Math.min(expr.length(), maxLength)).concat(hashSuffix);
+    }
+    return finalName;
   }
 }
