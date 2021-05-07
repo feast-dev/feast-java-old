@@ -150,12 +150,13 @@ public interface SSTableOnlineRetriever<K, V> extends OnlineRetrieverV2 {
    * @return Hashed suffix SSTable table name
    */
   default String trimAndHash(String expr, int maxLength) {
-    int maxPrefixLength = 40;
+    // Length 8 as derived from murmurhash_32 implementation
+    int maxPrefixLength = maxLength - 8;
     String finalName = expr;
     if (expr.length() > maxLength) {
       String hashSuffix =
           Hashing.murmur3_32().hashBytes(expr.substring(maxPrefixLength).getBytes()).toString();
-      finalName = expr.substring(0, Math.min(expr.length(), maxLength)).concat(hashSuffix);
+      finalName = expr.substring(0, Math.min(expr.length(), maxPrefixLength)).concat(hashSuffix);
     }
     return finalName;
   }
