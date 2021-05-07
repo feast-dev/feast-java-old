@@ -233,7 +233,12 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
 
     // BigTable Table names
     String superLongBtTableName = String.format("%s__%s", projectName, superLongEntityName);
-    superLongBtTableName = trimAndHash(superLongBtTableName, 50);
+    String hashSuffix =
+        Hashing.murmur3_32().hashBytes(superLongBtTableName.substring(42).getBytes()).toString();
+    superLongBtTableName =
+        superLongBtTableName
+            .substring(0, Math.min(superLongBtTableName.length(), 42))
+            .concat(hashSuffix);
     String btTableName = String.format("%s__%s", projectName, driverEntityName);
     String compoundBtTableName =
         String.format(
@@ -465,17 +470,6 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     encoder.flush();
 
     return output.toByteArray();
-  }
-
-  private static String trimAndHash(String expr, int maxLength) {
-    int maxPrefixLength = maxLength - 8;
-    String finalName = expr;
-    if (expr.length() > maxLength) {
-      String hashSuffix =
-          Hashing.murmur3_32().hashBytes(expr.substring(maxPrefixLength).getBytes()).toString();
-      finalName = expr.substring(0, Math.min(expr.length(), maxPrefixLength)).concat(hashSuffix);
-    }
-    return finalName;
   }
 
   @Test
