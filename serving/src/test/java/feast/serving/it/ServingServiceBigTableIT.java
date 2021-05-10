@@ -158,9 +158,21 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
             .build();
     TestUtils.applyEntity(coreClient, projectName, driverEntitySpec);
 
+    // Apply Entity (this_is_a_long_long_long_long_long_long_entity_id)
+    String superLongEntityName = "this_is_a_long_long_long_long_long_long_entity_id";
+    String superLongEntityDescription = "My super long entity id";
+    ValueProto.ValueType.Enum superLongEntityType = ValueProto.ValueType.Enum.INT64;
+    EntityProto.EntitySpecV2 superLongEntitySpec =
+        EntityProto.EntitySpecV2.newBuilder()
+            .setName(superLongEntityName)
+            .setDescription(superLongEntityDescription)
+            .setValueType(superLongEntityType)
+            .build();
+    TestUtils.applyEntity(coreClient, projectName, superLongEntitySpec);
+
     // Apply Entity (merchant_id)
     String merchantEntityName = "merchant_id";
-    String merchantEntityDescription = "My driver id";
+    String merchantEntityDescription = "My merchant id";
     ValueProto.ValueType.Enum merchantEntityType = ValueProto.ValueType.Enum.INT64;
     EntityProto.EntitySpecV2 merchantEntitySpec =
         EntityProto.EntitySpecV2.newBuilder()
@@ -186,6 +198,27 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     TestUtils.applyFeatureTable(
         coreClient, projectName, ridesFeatureTableName, ridesEntities, ridesFeatures, 7200);
 
+    // Apply FeatureTable (superLong)
+    String superLongFeatureTableName = "superlong";
+    ImmutableList<String> superLongEntities = ImmutableList.of(superLongEntityName);
+    ImmutableMap<String, ValueProto.ValueType.Enum> superLongFeatures =
+        ImmutableMap.of(
+            "trip_cost",
+            ValueProto.ValueType.Enum.INT64,
+            "trip_distance",
+            ValueProto.ValueType.Enum.DOUBLE,
+            "trip_empty",
+            ValueProto.ValueType.Enum.DOUBLE,
+            "trip_wrong_type",
+            ValueProto.ValueType.Enum.STRING);
+    TestUtils.applyFeatureTable(
+        coreClient,
+        projectName,
+        superLongFeatureTableName,
+        superLongEntities,
+        superLongFeatures,
+        7200);
+
     // Apply FeatureTable (rides_merchant)
     String rideMerchantFeatureTableName = "rides_merchant";
     ImmutableList<String> ridesMerchantEntities =
@@ -199,6 +232,13 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
         7200);
 
     // BigTable Table names
+    String superLongBtTableName = String.format("%s__%s", projectName, superLongEntityName);
+    String hashSuffix =
+        Hashing.murmur3_32().hashBytes(superLongBtTableName.substring(42).getBytes()).toString();
+    superLongBtTableName =
+        superLongBtTableName
+            .substring(0, Math.min(superLongBtTableName.length(), 42))
+            .concat(hashSuffix);
     String btTableName = String.format("%s__%s", projectName, driverEntityName);
     String compoundBtTableName =
         String.format(
@@ -236,6 +276,39 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
     byte[] schemaKey = createSchemaKey(schemaReference);
     ingestData(
         featureTableName, btTableName, entityFeatureKey, entityFeatureValue, schemaKey, ftSchema);
+
+    /** SuperLong Entity Ingestion Workflow */
+    Schema superLongFtSchema =
+        SchemaBuilder.record("SuperLongData")
+            .namespace(superLongFeatureTableName)
+            .fields()
+            .requiredLong(feature1Reference.getName())
+            .requiredDouble(feature2Reference.getName())
+            .nullableString(feature3Reference.getName(), "null")
+            .requiredString(feature4Reference.getName())
+            .endRecord();
+    byte[] superLongSchemaReference =
+        Hashing.murmur3_32().hashBytes(superLongFtSchema.toString().getBytes()).asBytes();
+
+    GenericRecord superLongRecord =
+        new GenericRecordBuilder(superLongFtSchema)
+            .set("trip_cost", 5L)
+            .set("trip_distance", 3.5)
+            .set("trip_empty", null)
+            .set("trip_wrong_type", "test")
+            .build();
+    byte[] superLongEntityFeatureKey =
+        String.valueOf(DataGenerator.createInt64Value(1).getInt64Val()).getBytes();
+    byte[] superLongEntityFeatureValue =
+        createEntityValue(superLongFtSchema, superLongSchemaReference, superLongRecord);
+    byte[] superLongSchemaKey = createSchemaKey(superLongSchemaReference);
+    ingestData(
+        superLongFeatureTableName,
+        superLongBtTableName,
+        superLongEntityFeatureKey,
+        superLongEntityFeatureValue,
+        superLongSchemaKey,
+        superLongFtSchema);
 
     /** Compound Entity Ingestion Workflow */
     Schema compoundFtSchema =
@@ -724,6 +797,62 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
 
     assert featureResponse.getFieldValues(0).getStatusesMap().values().stream()
         .allMatch(status -> status.equals(GetOnlineFeaturesResponse.FieldStatus.PRESENT));
+  }
+
+  @Test
+  public void shouldRegisterSuperLongEntityAndGetOnlineFeatures() {
+    // getOnlineFeatures Information
+    String projectName = "default";
+    String entityName = "this_is_a_long_long_long_long_long_long_entity_id";
+    ValueProto.Value entityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
+
+    // Instantiate EntityRows
+    GetOnlineFeaturesRequestV2.EntityRow entityRow1 =
+        DataGenerator.createEntityRow(entityName, DataGenerator.createInt64Value(1), 100);
+    ImmutableList<GetOnlineFeaturesRequestV2.EntityRow> entityRows = ImmutableList.of(entityRow1);
+
+    // Instantiate FeatureReferences
+    FeatureReferenceV2 featureReference =
+        DataGenerator.createFeatureReference("superlong", "trip_cost");
+    FeatureReferenceV2 notFoundFeatureReference =
+        DataGenerator.createFeatureReference("superlong", "trip_transaction");
+
+    ImmutableList<FeatureReferenceV2> featureReferences =
+        ImmutableList.of(featureReference, notFoundFeatureReference);
+
+    // Build GetOnlineFeaturesRequestV2
+    GetOnlineFeaturesRequestV2 onlineFeatureRequest =
+        TestUtils.createOnlineFeatureRequest(projectName, featureReferences, entityRows);
+    GetOnlineFeaturesResponse featureResponse =
+        servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
+
+    ImmutableMap<String, ValueProto.Value> expectedValueMap =
+        ImmutableMap.of(
+            entityName,
+            entityValue,
+            FeatureV2.getFeatureStringRef(featureReference),
+            DataGenerator.createInt64Value(5),
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            DataGenerator.createEmptyValue());
+
+    ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
+        ImmutableMap.of(
+            entityName,
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(featureReference),
+            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
+            FeatureV2.getFeatureStringRef(notFoundFeatureReference),
+            GetOnlineFeaturesResponse.FieldStatus.NOT_FOUND);
+
+    GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
+        GetOnlineFeaturesResponse.FieldValues.newBuilder()
+            .putAllFields(expectedValueMap)
+            .putAllStatuses(expectedStatusMap)
+            .build();
+    ImmutableList<GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
+        ImmutableList.of(expectedFieldValues);
+
+    assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
   }
 
   @TestConfiguration
