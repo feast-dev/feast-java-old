@@ -314,7 +314,10 @@ public class FeastProperties {
     }
 
     public BigTableStoreConfig getBigtableConfig() {
-      return new BigTableStoreConfig(this.config.get("project_id"), this.config.get("instance_id"));
+      return new BigTableStoreConfig(
+          this.config.get("project_id"),
+          this.config.get("instance_id"),
+          this.config.get("app_profile_id"));
     }
 
     public CassandraStoreConfig getCassandraConfig() {

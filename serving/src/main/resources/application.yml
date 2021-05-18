@@ -59,6 +59,7 @@ feast:
       config:
         project_id: <gcp_project>
         instance_id: <gcp_bigtable_instance>
+        app_profile_id: <gcp_bigtable_app_profile_id>
     - name: cassandra
       type: CASSANDRA
       config:

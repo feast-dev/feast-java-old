@@ -59,6 +59,7 @@ public class ServingServiceConfigV2 {
         BigtableDataSettings.newBuilder()
             .setProjectId(projectId)
             .setInstanceId(instanceId)
+            .setAppProfileId(config.getAppProfileId())
             .build());
   }
 

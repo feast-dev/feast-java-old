@@ -19,10 +19,12 @@ package feast.storage.connectors.bigtable.retriever;
 public class BigTableStoreConfig {
   private final String projectId;
   private final String instanceId;
+  private final String appProfileId;
 
-  public BigTableStoreConfig(String projectId, String instanceId) {
+  public BigTableStoreConfig(String projectId, String instanceId, String appProfileId) {
     this.projectId = projectId;
     this.instanceId = instanceId;
+    this.appProfileId = appProfileId;
   }
 
   public String getProjectId() {
@@ -31,5 +33,9 @@ public class BigTableStoreConfig {
 
   public String getInstanceId() {
     return this.instanceId;
+  }
+
+  public String getAppProfileId() {
+    return this.appProfileId;
   }
 }
