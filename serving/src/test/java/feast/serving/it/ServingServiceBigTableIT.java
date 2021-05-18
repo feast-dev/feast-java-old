@@ -96,6 +96,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
 
   static final String PROJECT_ID = "test-project";
   static final String INSTANCE_ID = "test-instance";
+  static final String APP_PROFILE_ID = "default";
   static ManagedChannel channel;
 
   static final FeatureReferenceV2 feature1Reference =
@@ -865,6 +866,7 @@ public class ServingServiceBigTableIT extends BaseAuthIT {
                   environment.getServicePort("bigtable_1", BIGTABLE_PORT))
               .setProjectId(PROJECT_ID)
               .setInstanceId(INSTANCE_ID)
+              .setAppProfileId(APP_PROFILE_ID)
               .build());
     }
   }
