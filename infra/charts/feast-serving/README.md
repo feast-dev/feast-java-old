@@ -2,7 +2,7 @@ feast-serving
 =============
 Feast Serving: Online feature serving service for Feast
 
-Current chart version is `0.26.1`
+Current chart version is `0.26.2`
 
 Source code can be found [here](https://github.com/feast-dev/feast-java)
 
