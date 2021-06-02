@@ -76,19 +76,15 @@ public class RegistrySpecService {
       throw new RuntimeException("Unable to retrieve registry", e);
     }
     GetFeatureTableResponse.Builder response = GetFeatureTableResponse.newBuilder();
-    String error = "";
     for (FeatureTable table : registry.getFeatureTablesList()) {
       if (table.getSpec().getProject().equals(getFeatureTableRequest.getProject())
           && table.getSpec().getName().equals(getFeatureTableRequest.getName())) {
         return response.setTable(table).build();
-      } else {
-        error = error + " next " + table.getSpec().getProject() + " " + table.getSpec().getName();
       }
     }
     throw new SpecRetrievalException(
         String.format(
-                "Unable to find FeatureTable %s/%s",
-                getFeatureTableRequest.getProject(), getFeatureTableRequest.getName())
-            + error);
+            "Unable to find FeatureTable %s/%s",
+            getFeatureTableRequest.getProject(), getFeatureTableRequest.getName()));
   }
 }
