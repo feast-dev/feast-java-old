@@ -26,14 +26,12 @@ import com.google.common.collect.ImmutableMap;
 import feast.common.it.DataGenerator;
 import feast.proto.core.CoreServiceProto.ListFeatureTablesRequest;
 import feast.proto.core.CoreServiceProto.ListFeatureTablesResponse;
-import feast.proto.core.CoreServiceProto.ListProjectsRequest;
-import feast.proto.core.CoreServiceProto.ListProjectsResponse;
 import feast.proto.core.FeatureTableProto;
 import feast.proto.core.FeatureTableProto.FeatureTableSpec;
 import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
 import feast.proto.types.ValueProto;
 import feast.serving.specs.CachedSpecService;
-import feast.serving.specs.CoreSpecService;
+import feast.serving.specs.RegistrySpecService;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -44,7 +42,7 @@ public class CachedSpecServiceTest {
 
   @Rule public final ExpectedException expectedException = ExpectedException.none();
 
-  @Mock CoreSpecService coreService;
+  @Mock RegistrySpecService registryService;
 
   private CachedSpecService cachedSpecService;
 
@@ -58,7 +56,6 @@ public class CachedSpecServiceTest {
   public void setUp() {
     initMocks(this);
 
-    this.setupProject("default");
     this.featureTableEntities = ImmutableList.of("entity1");
     this.featureTable1Features =
         ImmutableMap.of(
@@ -76,35 +73,29 @@ public class CachedSpecServiceTest {
             this.featureTableEntities,
             featureTable1Features,
             7200,
-            ImmutableMap.of());
+            ImmutableMap.of(),
+            "default");
     this.featureTable2Spec =
         DataGenerator.createFeatureTableSpec(
             "featuretable2",
             this.featureTableEntities,
             featureTable2Features,
             7200,
-            ImmutableMap.of());
+            ImmutableMap.of(),
+            "default");
 
-    this.setupFeatureTableAndProject("default");
+    this.setupFeatureTableAndProject();
 
-    cachedSpecService = new CachedSpecService(this.coreService);
+    cachedSpecService = new CachedSpecService(this.registryService);
   }
 
-  private void setupProject(String project) {
-    when(coreService.listProjects(ListProjectsRequest.newBuilder().build()))
-        .thenReturn(ListProjectsResponse.newBuilder().addProjects(project).build());
-  }
-
-  private void setupFeatureTableAndProject(String project) {
+  private void setupFeatureTableAndProject() {
     FeatureTableProto.FeatureTable featureTable1 =
         FeatureTableProto.FeatureTable.newBuilder().setSpec(this.featureTable1Spec).build();
     FeatureTableProto.FeatureTable featureTable2 =
         FeatureTableProto.FeatureTable.newBuilder().setSpec(this.featureTable2Spec).build();
 
-    when(coreService.listFeatureTables(
-            ListFeatureTablesRequest.newBuilder()
-                .setFilter(ListFeatureTablesRequest.Filter.newBuilder().setProject(project).build())
-                .build()))
+    when(registryService.listFeatureTables(ListFeatureTablesRequest.newBuilder().build()))
         .thenReturn(
             ListFeatureTablesResponse.newBuilder()
                 .addTables(featureTable1)

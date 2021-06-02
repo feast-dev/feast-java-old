@@ -18,6 +18,13 @@ package feast.serving.it;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.BucketInfo;
+import com.google.cloud.storage.BucketInfo.LifecycleRule;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.hash.Hashing;
@@ -28,6 +35,7 @@ import com.squareup.okhttp.Response;
 import feast.common.it.DataGenerator;
 import feast.common.models.FeatureV2;
 import feast.proto.core.EntityProto;
+import feast.proto.core.RegistryProto.Registry;
 import feast.proto.serving.ServingAPIProto;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
@@ -70,12 +78,14 @@ public class ServingServiceIT extends BaseAuthIT {
 
   static final Map<String, String> options = new HashMap<>();
   static final String timestampPrefix = "_ts";
-  static CoreSimpleAPIClient coreClient;
+  static RegistrySimpleAPIClient registryClient;
   static ServingServiceGrpc.ServingServiceBlockingStub servingStub;
   static RedisCommands<byte[], byte[]> syncCommands;
 
   static final int FEAST_SERVING_PORT = 6568;
   @LocalServerPort private int metricsPort;
+  private static String bucketName;
+  private static String objectName;
 
   @ClassRule @Container
   public static DockerComposeContainer environment =
@@ -91,11 +101,28 @@ public class ServingServiceIT extends BaseAuthIT {
   @DynamicPropertySource
   static void initialize(DynamicPropertyRegistry registry) {
     registry.add("grpc.server.port", () -> FEAST_SERVING_PORT);
+
+    registry.add("feast.bucket-name", () -> bucketName);
+    registry.add("feast.object-name", () -> objectName);
   }
 
   @BeforeAll
   static void globalSetup() {
-    coreClient = TestUtils.getApiClientForCore(FEAST_CORE_PORT);
+    Registry registryProto = Registry.newBuilder().build();
+    Storage storage = StorageOptions.getDefaultInstance().getService();
+    bucketName = String.format("feast-serving-registry-test-%d", System.currentTimeMillis());
+    objectName = "registry.db";
+    storage.create(
+        BucketInfo.newBuilder(bucketName)
+            .setLifecycleRules(
+                ImmutableList.of(
+                    new LifecycleRule(
+                        LifecycleRule.LifecycleAction.newDeleteAction(),
+                        LifecycleRule.LifecycleCondition.newBuilder().setAge(14).build())))
+            .build());
+    BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(bucketName, objectName)).build();
+    Blob blob = storage.create(blobInfo, registryProto.toByteArray());
+    registryClient = TestUtils.getApiClientForRegistry(bucketName, objectName);
     servingStub = TestUtils.getServingServiceStub(false, FEAST_SERVING_PORT, null);
 
     RedisClient redisClient =
@@ -119,7 +146,7 @@ public class ServingServiceIT extends BaseAuthIT {
             .setDescription(description)
             .setValueType(entityType)
             .build();
-    TestUtils.applyEntity(coreClient, projectName, entitySpec);
+    TestUtils.applyEntity(registryClient, projectName, entitySpec);
 
     // Apply FeatureTable
     String featureTableName = "rides";
@@ -150,7 +177,7 @@ public class ServingServiceIT extends BaseAuthIT {
             ValueProto.ValueType.Enum.STRING);
 
     TestUtils.applyFeatureTable(
-        coreClient, projectName, featureTableName, entities, features, 7200);
+        registryClient, projectName, featureTableName, entities, features, 7200);
 
     // Serialize Redis Key with Entity i.e <default_driver_id_1>
     RedisProto.RedisKeyV2 redisKey =
@@ -443,7 +470,7 @@ public class ServingServiceIT extends BaseAuthIT {
             ValueProto.ValueType.Enum.STRING);
 
     TestUtils.applyFeatureTable(
-        coreClient, projectName, featureTableName, entities, features, 7200);
+        registryClient, projectName, featureTableName, entities, features, 7200);
 
     // Sleep is necessary to ensure caching (every 1s) of updated FeatureTable is done
     try {

@@ -19,16 +19,14 @@ package feast.serving.specs;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import feast.proto.core.CoreServiceProto;
+import feast.proto.core.CoreServiceProto.GetFeatureTableRequest;
 import feast.proto.core.CoreServiceProto.ListFeatureTablesRequest;
 import feast.proto.core.CoreServiceProto.ListFeatureTablesResponse;
-import feast.proto.core.CoreServiceProto.ListProjectsRequest;
 import feast.proto.core.FeatureProto;
 import feast.proto.core.FeatureTableProto.FeatureTable;
 import feast.proto.core.FeatureTableProto.FeatureTableSpec;
 import feast.proto.serving.ServingAPIProto;
 import feast.serving.exception.SpecRetrievalException;
-import io.grpc.StatusRuntimeException;
 import io.prometheus.client.Gauge;
 import java.util.HashMap;
 import java.util.List;
@@ -37,14 +35,14 @@ import java.util.concurrent.ExecutionException;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.slf4j.Logger;
 
-/** In-memory cache of specs hosted in Feast Core. */
+/** In-memory cache of specs from the object store registry. */
 public class CachedSpecService {
 
   private static final int MAX_SPEC_COUNT = 1000;
   private static final Logger log = org.slf4j.LoggerFactory.getLogger(CachedSpecService.class);
   private static final String DEFAULT_PROJECT_NAME = "default";
 
-  private final CoreSpecService coreService;
+  private final RegistrySpecService registryService;
 
   private static Gauge cacheLastUpdated =
       Gauge.build()
@@ -66,8 +64,8 @@ public class CachedSpecService {
           ImmutablePair<String, ServingAPIProto.FeatureReferenceV2>, FeatureProto.FeatureSpecV2>
       featureCache;
 
-  public CachedSpecService(CoreSpecService coreService) {
-    this.coreService = coreService;
+  public CachedSpecService(RegistrySpecService registryService) {
+    this.registryService = registryService;
 
     CacheLoader<ImmutablePair<String, String>, FeatureTableSpec> featureTableCacheLoader =
         CacheLoader.from(k -> retrieveSingleFeatureTable(k.getLeft(), k.getRight()));
@@ -83,7 +81,7 @@ public class CachedSpecService {
 
   /**
    * Reload the store configuration from the given config path, then retrieve the necessary specs
-   * from core to preload the cache.
+   * from the object store registry to preload the cache.
    */
   public void populateCache() {
     ImmutablePair<
@@ -127,37 +125,23 @@ public class CachedSpecService {
     HashMap<ImmutablePair<String, ServingAPIProto.FeatureReferenceV2>, FeatureProto.FeatureSpecV2>
         features = new HashMap<>();
 
-    List<String> projects =
-        coreService.listProjects(ListProjectsRequest.newBuilder().build()).getProjectsList();
+    ListFeatureTablesResponse featureTablesResponse =
+        registryService.listFeatureTables(ListFeatureTablesRequest.newBuilder().build());
+    Map<ServingAPIProto.FeatureReferenceV2, FeatureProto.FeatureSpecV2> featureRefSpecMap =
+        new HashMap<>();
+    for (FeatureTable featureTable : featureTablesResponse.getTablesList()) {
+      FeatureTableSpec spec = featureTable.getSpec();
+      featureTables.put(ImmutablePair.of(spec.getProject(), spec.getName()), spec);
 
-    for (String project : projects) {
-      try {
-        ListFeatureTablesResponse featureTablesResponse =
-            coreService.listFeatureTables(
-                ListFeatureTablesRequest.newBuilder()
-                    .setFilter(ListFeatureTablesRequest.Filter.newBuilder().setProject(project))
-                    .build());
-        Map<ServingAPIProto.FeatureReferenceV2, FeatureProto.FeatureSpecV2> featureRefSpecMap =
-            new HashMap<>();
-        for (FeatureTable featureTable : featureTablesResponse.getTablesList()) {
-          FeatureTableSpec spec = featureTable.getSpec();
-          featureTables.put(ImmutablePair.of(project, spec.getName()), spec);
-
-          String featureTableName = spec.getName();
-          List<FeatureProto.FeatureSpecV2> featureSpecs = spec.getFeaturesList();
-          for (FeatureProto.FeatureSpecV2 featureSpec : featureSpecs) {
-            ServingAPIProto.FeatureReferenceV2 featureReference =
-                ServingAPIProto.FeatureReferenceV2.newBuilder()
-                    .setFeatureTable(featureTableName)
-                    .setName(featureSpec.getName())
-                    .build();
-            features.put(ImmutablePair.of(project, featureReference), featureSpec);
-          }
-        }
-
-      } catch (StatusRuntimeException e) {
-        throw new RuntimeException(
-            String.format("Unable to retrieve specs matching project %s", project), e);
+      String featureTableName = spec.getName();
+      List<FeatureProto.FeatureSpecV2> featureSpecs = spec.getFeaturesList();
+      for (FeatureProto.FeatureSpecV2 featureSpec : featureSpecs) {
+        ServingAPIProto.FeatureReferenceV2 featureReference =
+            ServingAPIProto.FeatureReferenceV2.newBuilder()
+                .setFeatureTable(featureTableName)
+                .setName(featureSpec.getName())
+                .build();
+        features.put(ImmutablePair.of(spec.getProject(), featureReference), featureSpec);
       }
     }
     return ImmutablePair.of(featureTables, features);
@@ -165,9 +149,9 @@ public class CachedSpecService {
 
   private FeatureTableSpec retrieveSingleFeatureTable(String projectName, String tableName) {
     FeatureTable table =
-        coreService
+        registryService
             .getFeatureTable(
-                CoreServiceProto.GetFeatureTableRequest.newBuilder()
+                GetFeatureTableRequest.newBuilder()
                     .setProject(projectName)
                     .setName(tableName)
                     .build())
@@ -178,7 +162,7 @@ public class CachedSpecService {
   private FeatureProto.FeatureSpecV2 retrieveSingleFeature(
       String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
     FeatureTableSpec featureTableSpec =
-        getFeatureTableSpec(projectName, featureReference); // don't stress core too much
+        getFeatureTableSpec(projectName, featureReference); // don't stress registry too much
     if (featureTableSpec == null) {
       return null;
     }

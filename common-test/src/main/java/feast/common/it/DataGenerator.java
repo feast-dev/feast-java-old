@@ -198,6 +198,34 @@ public class DataGenerator {
         .build();
   }
 
+  // Create a FeatureTableSpec with project
+  public static FeatureTableSpec createFeatureTableSpec(
+      String name,
+      List<String> entities,
+      ImmutableMap<String, ValueProto.ValueType.Enum> features,
+      int maxAgeSecs,
+      Map<String, String> labels,
+      String project) {
+
+    return FeatureTableSpec.newBuilder()
+        .setName(name)
+        .addAllEntities(entities)
+        .addAllFeatures(
+            features.entrySet().stream()
+                .map(
+                    entry ->
+                        FeatureSpecV2.newBuilder()
+                            .setName(entry.getKey())
+                            .setValueType(entry.getValue())
+                            .putAllLabels(labels)
+                            .build())
+                .collect(Collectors.toList()))
+        .setMaxAge(Duration.newBuilder().setSeconds(maxAgeSecs).build())
+        .putAllLabels(labels)
+        .setProject(project)
+        .build();
+  }
+
   public static DataSource createFileDataSourceSpec(
       String fileURL, String timestampColumn, String datePartitionColumn) {
     return DataSource.newBuilder()

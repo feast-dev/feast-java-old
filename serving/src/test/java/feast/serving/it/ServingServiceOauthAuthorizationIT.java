@@ -21,12 +21,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.testcontainers.containers.wait.strategy.Wait.forHttp;
 
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.BucketInfo;
+import com.google.cloud.storage.BucketInfo.LifecycleRule;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
 import feast.common.it.DataGenerator;
+import feast.proto.core.RegistryProto.Registry;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
 import feast.proto.serving.ServingServiceGrpc.ServingServiceBlockingStub;
 import feast.proto.types.ValueProto;
-import feast.proto.types.ValueProto.Value;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import java.io.File;
@@ -69,8 +76,10 @@ public class ServingServiceOauthAuthorizationIT extends BaseAuthIT {
   private static int KETO_PORT = 4466;
   private static int KETO_ADAPTOR_PORT = 8080;
   static String subjectClaim = "sub";
-  static CoreSimpleAPIClient coreClient;
+  static RegistrySimpleAPIClient registryClient;
   static final int FEAST_SERVING_PORT = 6766;
+  private static String bucketName;
+  private static String objectName;
 
   @ClassRule @Container
   public static DockerComposeContainer environment =
@@ -110,10 +119,27 @@ public class ServingServiceOauthAuthorizationIT extends BaseAuthIT {
     registry.add("feast.security.authentication.options.jwkEndpointURI", () -> JWK_URI);
     registry.add("feast.security.authorization.options.authorizationUrl", () -> ketoAdaptorUrl);
     registry.add("grpc.server.port", () -> FEAST_SERVING_PORT);
+
+    registry.add("feast.bucket-name", () -> bucketName);
+    registry.add("feast.object-name", () -> objectName);
   }
 
   @BeforeAll
   static void globalSetup() throws IOException, InitializationError, InterruptedException {
+    Registry registryProto = Registry.newBuilder().build();
+    Storage storage = StorageOptions.getDefaultInstance().getService();
+    bucketName = String.format("feast-serving-registry-test-%d", System.currentTimeMillis());
+    objectName = "registry.db";
+    storage.create(
+        BucketInfo.newBuilder(bucketName)
+            .setLifecycleRules(
+                com.google.common.collect.ImmutableList.of(
+                    new LifecycleRule(
+                        LifecycleRule.LifecycleAction.newDeleteAction(),
+                        LifecycleRule.LifecycleCondition.newBuilder().setAge(14).build())))
+            .build());
+    BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(bucketName, objectName)).build();
+    Blob blob = storage.create(blobInfo, registryProto.toByteArray());
     String hydraExternalHost = environment.getServiceHost(HYDRA, HYDRA_PORT);
     Integer hydraExternalPort = environment.getServicePort(HYDRA, HYDRA_PORT);
     String hydraExternalUrl = String.format("http://%s:%s", hydraExternalHost, hydraExternalPort);
@@ -130,12 +156,12 @@ public class ServingServiceOauthAuthorizationIT extends BaseAuthIT {
     adminCredentials.put("audience", AUDIENCE);
     adminCredentials.put("grant_type", GRANT_TYPE);
 
-    coreClient = AuthTestUtils.getSecureApiClientForCore(FEAST_CORE_PORT, adminCredentials);
-    coreClient.simpleApplyEntity(
+    registryClient = AuthTestUtils.getSecureApiClientForRegistry(bucketName, objectName);
+    registryClient.simpleApplyEntity(
         PROJECT_NAME,
         DataGenerator.createEntitySpecV2(
             ENTITY_ID, "", ValueProto.ValueType.Enum.STRING, Collections.emptyMap()));
-    coreClient.simpleApplyFeatureTable(
+    registryClient.simpleApplyFeatureTable(
         PROJECT_NAME,
         DataGenerator.createFeatureTableSpec(
             FEATURE_TABLE_NAME,
@@ -176,7 +202,7 @@ public class ServingServiceOauthAuthorizationIT extends BaseAuthIT {
     GetOnlineFeaturesResponse featureResponse =
         servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
     assertEquals(1, featureResponse.getFieldValuesCount());
-    Map<String, Value> fieldsMap = featureResponse.getFieldValues(0).getFieldsMap();
+    Map<String, ValueProto.Value> fieldsMap = featureResponse.getFieldValues(0).getFieldsMap();
     assertTrue(fieldsMap.containsKey(ENTITY_ID));
     assertTrue(fieldsMap.containsKey(FEATURE_TABLE_NAME + ":" + FEATURE_NAME));
     ((ManagedChannel) servingStub.getChannel()).shutdown();
@@ -195,7 +221,7 @@ public class ServingServiceOauthAuthorizationIT extends BaseAuthIT {
     GetOnlineFeaturesResponse featureResponse =
         servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
     assertEquals(1, featureResponse.getFieldValuesCount());
-    Map<String, Value> fieldsMap = featureResponse.getFieldValues(0).getFieldsMap();
+    Map<String, ValueProto.Value> fieldsMap = featureResponse.getFieldValues(0).getFieldsMap();
     assertTrue(fieldsMap.containsKey(ENTITY_ID));
     assertTrue(fieldsMap.containsKey(FEATURE_TABLE_NAME + ":" + FEATURE_NAME));
     ((ManagedChannel) servingStub.getChannel()).shutdown();
