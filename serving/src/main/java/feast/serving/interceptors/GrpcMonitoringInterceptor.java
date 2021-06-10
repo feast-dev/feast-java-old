@@ -24,6 +24,7 @@ import io.grpc.ServerCall.Listener;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
+import java.util.Optional;
 
 /**
  * GrpcMonitoringInterceptor intercepts GRPC calls to provide request latency histogram metrics in
@@ -39,12 +40,16 @@ public class GrpcMonitoringInterceptor implements ServerInterceptor {
     String fullMethodName = call.getMethodDescriptor().getFullMethodName();
     String methodName = fullMethodName.substring(fullMethodName.indexOf("/") + 1);
 
+    GrpcMonitoringContext.getInstance().clearProject();
+
     return next.startCall(
         new SimpleForwardingServerCall<ReqT, RespT>(call) {
           @Override
           public void close(Status status, Metadata trailers) {
+            Optional<String> projectName = GrpcMonitoringContext.getInstance().getProject();
+
             Metrics.requestLatency
-                .labels(methodName)
+                .labels(methodName, projectName.orElse(""))
                 .observe((System.currentTimeMillis() - startCallMillis) / 1000f);
             Metrics.grpcRequestCount.labels(methodName, status.getCode().name()).inc();
             super.close(status, trailers);
