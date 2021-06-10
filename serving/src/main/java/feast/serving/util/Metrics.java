@@ -26,7 +26,7 @@ public class Metrics {
           .name("request_latency_seconds")
           .subsystem("feast_serving")
           .help("Request latency in seconds")
-          .labelNames("method")
+          .labelNames("method", "project")
           .register();
 
   public static final Histogram requestEntityCountDistribution =
