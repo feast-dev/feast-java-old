@@ -19,13 +19,11 @@ package feast.serving.config;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.protobuf.InvalidProtocolBufferException;
 import feast.serving.specs.CachedSpecService;
-import feast.serving.specs.CoreSpecService;
-import io.grpc.CallCredentials;
+import feast.serving.specs.RegistrySpecService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,14 +32,14 @@ import org.springframework.context.annotation.Configuration;
 public class SpecServiceConfig {
 
   private static final Logger log = org.slf4j.LoggerFactory.getLogger(SpecServiceConfig.class);
-  private String feastCoreHost;
-  private int feastCorePort;
+  private String bucketName;
+  private String objectName;
   private int feastCachedSpecServiceRefreshInterval;
 
   @Autowired
   public SpecServiceConfig(FeastProperties feastProperties) {
-    this.feastCoreHost = feastProperties.getCoreHost();
-    this.feastCorePort = feastProperties.getCoreGrpcPort();
+    this.bucketName = feastProperties.getBucketName();
+    this.objectName = feastProperties.getObjectName();
     this.feastCachedSpecServiceRefreshInterval = feastProperties.getCoreCacheRefreshInterval();
   }
 
@@ -60,11 +58,10 @@ public class SpecServiceConfig {
   }
 
   @Bean
-  public CachedSpecService specService(ObjectProvider<CallCredentials> callCredentials)
+  public CachedSpecService specService()
       throws InvalidProtocolBufferException, JsonProcessingException {
-    CoreSpecService coreService =
-        new CoreSpecService(feastCoreHost, feastCorePort, callCredentials);
-    CachedSpecService cachedSpecStorage = new CachedSpecService(coreService);
+    RegistrySpecService registryService = new RegistrySpecService(bucketName, objectName);
+    CachedSpecService cachedSpecStorage = new CachedSpecService(registryService);
     try {
       cachedSpecStorage.populateCache();
     } catch (Exception e) {

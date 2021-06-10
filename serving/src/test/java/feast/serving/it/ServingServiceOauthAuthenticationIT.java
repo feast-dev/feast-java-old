@@ -20,6 +20,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.testcontainers.containers.wait.strategy.Wait.forHttp;
 
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.BucketInfo;
+import com.google.cloud.storage.BucketInfo.LifecycleRule;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.squareup.okhttp.OkHttpClient;
 import com.squareup.okhttp.Request;
@@ -27,11 +35,11 @@ import com.squareup.okhttp.Response;
 import feast.common.it.DataGenerator;
 import feast.proto.core.EntityProto;
 import feast.proto.core.FeatureTableProto;
+import feast.proto.core.RegistryProto.Registry;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
 import feast.proto.serving.ServingServiceGrpc.ServingServiceBlockingStub;
 import feast.proto.types.ValueProto;
-import feast.proto.types.ValueProto.Value;
 import io.grpc.ManagedChannel;
 import java.io.File;
 import java.io.IOException;
@@ -48,6 +56,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.DockerComposeContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
@@ -65,12 +75,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 public class ServingServiceOauthAuthenticationIT extends BaseAuthIT {
 
-  CoreSimpleAPIClient coreClient;
+  RegistrySimpleAPIClient registryClient;
   FeatureTableProto.FeatureTableSpec expectedFeatureTableSpec;
   static final Map<String, String> options = new HashMap<>();
 
   static final int FEAST_SERVING_PORT = 6566;
   @LocalServerPort private int metricsPort;
+  private static String bucketName;
+  private static String objectName;
 
   @ClassRule @Container
   public static DockerComposeContainer environment =
@@ -84,8 +96,28 @@ public class ServingServiceOauthAuthenticationIT extends BaseAuthIT {
               Wait.forLogMessage(".*gRPC Server started.*\\n", 1)
                   .withStartupTimeout(Duration.ofMinutes(SERVICE_START_MAX_WAIT_TIME_IN_MINUTES)));
 
+  @DynamicPropertySource
+  static void initialize(DynamicPropertyRegistry registry) {
+    registry.add("feast.bucket-name", () -> bucketName);
+    registry.add("feast.object-name", () -> objectName);
+  }
+
   @BeforeAll
   static void globalSetup() throws IOException, InitializationError, InterruptedException {
+    Registry registryProto = Registry.newBuilder().build();
+    Storage storage = StorageOptions.getDefaultInstance().getService();
+    bucketName = String.format("feast-serving-registry-test-%d", System.currentTimeMillis());
+    objectName = "registry.db";
+    storage.create(
+        BucketInfo.newBuilder(bucketName)
+            .setLifecycleRules(
+                ImmutableList.of(
+                    new LifecycleRule(
+                        LifecycleRule.LifecycleAction.newDeleteAction(),
+                        LifecycleRule.LifecycleCondition.newBuilder().setAge(14).build())))
+            .build());
+    BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(bucketName, objectName)).build();
+    Blob blob = storage.create(blobInfo, registryProto.toByteArray());
     String hydraExternalHost = environment.getServiceHost(HYDRA, HYDRA_PORT);
     Integer hydraExternalPort = environment.getServicePort(HYDRA, HYDRA_PORT);
     String hydraExternalUrl = String.format("http://%s:%s", hydraExternalHost, hydraExternalPort);
@@ -102,14 +134,14 @@ public class ServingServiceOauthAuthenticationIT extends BaseAuthIT {
 
   @BeforeEach
   public void initState() {
-    coreClient = AuthTestUtils.getSecureApiClientForCore(FEAST_CORE_PORT, options);
+    registryClient = AuthTestUtils.getSecureApiClientForRegistry(bucketName, objectName);
     EntityProto.EntitySpecV2 entitySpec =
         DataGenerator.createEntitySpecV2(
             ENTITY_ID,
             "Entity 1 description",
             ValueProto.ValueType.Enum.STRING,
             ImmutableMap.of("label_key", "label_value"));
-    coreClient.simpleApplyEntity(PROJECT_NAME, entitySpec);
+    registryClient.simpleApplyEntity(PROJECT_NAME, entitySpec);
 
     expectedFeatureTableSpec =
         DataGenerator.createFeatureTableSpec(
@@ -126,7 +158,7 @@ public class ServingServiceOauthAuthenticationIT extends BaseAuthIT {
             .setBatchSource(
                 DataGenerator.createFileDataSourceSpec("file:///path/to/file", "ts_col", ""))
             .build();
-    coreClient.simpleApplyFeatureTable(PROJECT_NAME, expectedFeatureTableSpec);
+    registryClient.simpleApplyFeatureTable(PROJECT_NAME, expectedFeatureTableSpec);
   }
 
   /** Test that Feast Serving metrics endpoint can be accessed with authentication enabled */
@@ -145,7 +177,7 @@ public class ServingServiceOauthAuthenticationIT extends BaseAuthIT {
   @Test
   public void shouldAllowUnauthenticatedGetOnlineFeatures() {
     FeatureTableProto.FeatureTable actualFeatureTable =
-        coreClient.simpleGetFeatureTable(PROJECT_NAME, FEATURE_TABLE_NAME);
+        registryClient.simpleGetFeatureTable(PROJECT_NAME, FEATURE_TABLE_NAME);
     assertEquals(expectedFeatureTableSpec.getName(), actualFeatureTable.getSpec().getName());
     assertEquals(
         expectedFeatureTableSpec.getBatchSource(), actualFeatureTable.getSpec().getBatchSource());
@@ -159,7 +191,7 @@ public class ServingServiceOauthAuthenticationIT extends BaseAuthIT {
         servingStub.getOnlineFeaturesV2(onlineFeatureRequestV2);
 
     assertEquals(1, featureResponse.getFieldValuesCount());
-    Map<String, Value> fieldsMap = featureResponse.getFieldValues(0).getFieldsMap();
+    Map<String, ValueProto.Value> fieldsMap = featureResponse.getFieldValues(0).getFieldsMap();
     assertTrue(fieldsMap.containsKey(ENTITY_ID));
     assertTrue(fieldsMap.containsKey(FEATURE_TABLE_NAME + ":" + FEATURE_NAME));
     ((ManagedChannel) servingStub.getChannel()).shutdown();
@@ -168,7 +200,7 @@ public class ServingServiceOauthAuthenticationIT extends BaseAuthIT {
   @Test
   void canGetOnlineFeaturesIfAuthenticated() {
     FeatureTableProto.FeatureTable actualFeatureTable =
-        coreClient.simpleGetFeatureTable(PROJECT_NAME, FEATURE_TABLE_NAME);
+        registryClient.simpleGetFeatureTable(PROJECT_NAME, FEATURE_TABLE_NAME);
     assertEquals(expectedFeatureTableSpec.getName(), actualFeatureTable.getSpec().getName());
     assertEquals(
         expectedFeatureTableSpec.getBatchSource(), actualFeatureTable.getSpec().getBatchSource());
@@ -182,7 +214,7 @@ public class ServingServiceOauthAuthenticationIT extends BaseAuthIT {
     GetOnlineFeaturesResponse featureResponse =
         servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
     assertEquals(1, featureResponse.getFieldValuesCount());
-    Map<String, Value> fieldsMap = featureResponse.getFieldValues(0).getFieldsMap();
+    Map<String, ValueProto.Value> fieldsMap = featureResponse.getFieldValues(0).getFieldsMap();
     assertTrue(fieldsMap.containsKey(ENTITY_ID));
     assertTrue(fieldsMap.containsKey(FEATURE_TABLE_NAME + ":" + FEATURE_NAME));
     ((ManagedChannel) servingStub.getChannel()).shutdown();

@@ -38,7 +38,6 @@ import javax.validation.*;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Positive;
-import org.apache.logging.log4j.core.config.plugins.validation.constraints.ValidHost;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.info.BuildProperties;
@@ -66,11 +65,11 @@ public class FeastProperties {
   /* Feast Serving build version */
   @NotBlank private String version = "unknown";
 
-  /* Feast Core host to connect to. */
-  @ValidHost @NotBlank private String coreHost;
+  /* Bucket name for Feast object registry. */
+  @NotBlank private String bucketName;
 
-  /* Feast Core port to connect to. */
-  @Positive private int coreGrpcPort;
+  /* Object name for Feast object registry. */
+  @NotBlank private String objectName;
 
   private CoreAuthenticationProperties coreAuthentication;
 
@@ -181,39 +180,39 @@ public class FeastProperties {
   }
 
   /**
-   * Gets Feast Core host.
+   * Gets Feast object registry bucket name.
    *
-   * @return Feast Core host
+   * @return Feast object registry bucket name
    */
-  public String getCoreHost() {
-    return coreHost;
+  public String getBucketName() {
+    return bucketName;
   }
 
   /**
-   * Sets Feast Core host to connect to.
+   * Sets Feast object registry bucket name.
    *
-   * @param coreHost Feast Core host
+   * @param bucketName Feast object registry bucket name
    */
-  public void setCoreHost(String coreHost) {
-    this.coreHost = coreHost;
+  public void setBucketName(String bucketName) {
+    this.bucketName = bucketName;
   }
 
   /**
-   * Gets Feast Core gRPC port.
+   * Gets Feast object registry object name.
    *
-   * @return Feast Core gRPC port
+   * @return Feast object registry object name
    */
-  public int getCoreGrpcPort() {
-    return coreGrpcPort;
+  public String getObjectName() {
+    return objectName;
   }
 
   /**
-   * Sets Feast Core gRPC port.
+   * Sets Feast object registry object name.
    *
-   * @param coreGrpcPort gRPC port of Feast Core
+   * @param objectName object registry object name
    */
-  public void setCoreGrpcPort(int coreGrpcPort) {
-    this.coreGrpcPort = coreGrpcPort;
+  public void setObjectName(String objectName) {
+    this.objectName = objectName;
   }
 
   /**

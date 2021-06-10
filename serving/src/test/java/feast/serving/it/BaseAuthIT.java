@@ -46,7 +46,7 @@ public class BaseAuthIT {
   static final String HYDRA = "hydra_1";
   static final int HYDRA_PORT = 4445;
 
-  static CoreSimpleAPIClient insecureApiClient;
+  static RegistrySimpleAPIClient insecureApiClient;
 
   static final String REDIS = "redis_1";
   static final int REDIS_PORT = 6379;

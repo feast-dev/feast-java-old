@@ -20,12 +20,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.google.cloud.storage.Blob;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.BucketInfo;
+import com.google.cloud.storage.BucketInfo.LifecycleRule;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.hash.Hashing;
 import feast.common.it.DataGenerator;
 import feast.common.models.FeatureV2;
 import feast.proto.core.EntityProto;
+import feast.proto.core.RegistryProto.Registry;
 import feast.proto.serving.ServingAPIProto.FeatureReferenceV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
@@ -74,7 +82,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 public class ServingServiceCassandraIT extends BaseAuthIT {
 
   static final Map<String, String> options = new HashMap<>();
-  static CoreSimpleAPIClient coreClient;
+  static RegistrySimpleAPIClient registryClient;
   static ServingServiceGrpc.ServingServiceBlockingStub servingStub;
 
   static CqlSession cqlSession;
@@ -88,6 +96,8 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
       DataGenerator.createFeatureReference("rides", "trip_empty");
   static final FeatureReferenceV2 feature4Reference =
       DataGenerator.createFeatureReference("rides", "trip_wrong_type");
+  private static String bucketName;
+  private static String objectName;
 
   @ClassRule @Container
   public static DockerComposeContainer environment =
@@ -103,11 +113,28 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
   @DynamicPropertySource
   static void initialize(DynamicPropertyRegistry registry) {
     registry.add("grpc.server.port", () -> FEAST_SERVING_PORT);
+
+    registry.add("feast.bucket-name", () -> bucketName);
+    registry.add("feast.object-name", () -> objectName);
   }
 
   @BeforeAll
   static void globalSetup() throws IOException {
-    coreClient = TestUtils.getApiClientForCore(FEAST_CORE_PORT);
+    Registry registryProto = Registry.newBuilder().build();
+    Storage storage = StorageOptions.getDefaultInstance().getService();
+    bucketName = String.format("feast-serving-registry-test-%d", System.currentTimeMillis());
+    objectName = "registry.db";
+    storage.create(
+        BucketInfo.newBuilder(bucketName)
+            .setLifecycleRules(
+                ImmutableList.of(
+                    new LifecycleRule(
+                        LifecycleRule.LifecycleAction.newDeleteAction(),
+                        LifecycleRule.LifecycleCondition.newBuilder().setAge(14).build())))
+            .build());
+    BlobInfo blobInfo = BlobInfo.newBuilder(BlobId.of(bucketName, objectName)).build();
+    Blob blob = storage.create(blobInfo, registryProto.toByteArray());
+    registryClient = TestUtils.getApiClientForRegistry(bucketName, objectName);
     servingStub = TestUtils.getServingServiceStub(false, FEAST_SERVING_PORT, null);
 
     cqlSession =
@@ -131,7 +158,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             .setDescription(driverEntityDescription)
             .setValueType(driverEntityType)
             .build();
-    TestUtils.applyEntity(coreClient, projectName, driverEntitySpec);
+    TestUtils.applyEntity(registryClient, projectName, driverEntitySpec);
 
     // Apply Entity (merchant_id)
     String merchantEntityName = "merchant_id";
@@ -143,7 +170,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             .setDescription(merchantEntityDescription)
             .setValueType(merchantEntityType)
             .build();
-    TestUtils.applyEntity(coreClient, projectName, merchantEntitySpec);
+    TestUtils.applyEntity(registryClient, projectName, merchantEntitySpec);
 
     // Apply FeatureTable (rides)
     String ridesFeatureTableName = "rides";
@@ -159,7 +186,7 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             "trip_wrong_type",
             ValueProto.ValueType.Enum.STRING);
     TestUtils.applyFeatureTable(
-        coreClient, projectName, ridesFeatureTableName, ridesEntities, ridesFeatures, 7200);
+        registryClient, projectName, ridesFeatureTableName, ridesEntities, ridesFeatures, 7200);
 
     // Apply FeatureTable (food)
     String foodFeatureTableName = "food";
@@ -171,14 +198,14 @@ public class ServingServiceCassandraIT extends BaseAuthIT {
             "trip_distance",
             ValueProto.ValueType.Enum.DOUBLE);
     TestUtils.applyFeatureTable(
-        coreClient, projectName, foodFeatureTableName, foodEntities, foodFeatures, 7200);
+        registryClient, projectName, foodFeatureTableName, foodEntities, foodFeatures, 7200);
 
     // Apply FeatureTable (rides_merchant)
     String rideMerchantFeatureTableName = "rides_merchant";
     ImmutableList<String> ridesMerchantEntities =
         ImmutableList.of(driverEntityName, merchantEntityName);
     TestUtils.applyFeatureTable(
-        coreClient,
+        registryClient,
         projectName,
         rideMerchantFeatureTableName,
         ridesMerchantEntities,

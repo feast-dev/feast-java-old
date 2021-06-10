@@ -20,7 +20,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.protobuf.Timestamp;
 import feast.common.auth.credentials.OAuthCredentials;
-import feast.proto.core.CoreServiceGrpc;
 import feast.proto.serving.ServingAPIProto;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
 import feast.proto.serving.ServingServiceGrpc;
@@ -69,17 +68,9 @@ public class AuthTestUtils {
         .build();
   }
 
-  public static CoreSimpleAPIClient getSecureApiClientForCore(
-      int feastCorePort, Map<String, String> options) {
-    CallCredentials callCredentials = null;
-    callCredentials = new OAuthCredentials(options);
-    Channel secureChannel =
-        ManagedChannelBuilder.forAddress("localhost", feastCorePort).usePlaintext().build();
-
-    CoreServiceGrpc.CoreServiceBlockingStub secureCoreService =
-        CoreServiceGrpc.newBlockingStub(secureChannel).withCallCredentials(callCredentials);
-
-    return new CoreSimpleAPIClient(secureCoreService);
+  public static RegistrySimpleAPIClient getSecureApiClientForRegistry(
+      String bucketName, String objectName) {
+    return new RegistrySimpleAPIClient(bucketName, objectName);
   }
 
   public static ServingServiceGrpc.ServingServiceBlockingStub getServingServiceStub(

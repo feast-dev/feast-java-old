@@ -109,6 +109,12 @@
       <scope>test</scope>
     </dependency>
 
+    <dependency>
+      <groupId>com.google.cloud</groupId>
+      <artifactId>google-cloud-storage</artifactId>
+      <version>1.111.1</version>
+    </dependency>
+
 
     <!-- TODO: SLF4J is being used via Lombok, but also jog4j - pick one -->
     <dependency>

@@ -21,8 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.google.common.collect.ImmutableMap;
 import feast.common.auth.credentials.OAuthCredentials;
 import feast.common.it.DataGenerator;
-import feast.proto.core.CoreServiceGrpc;
-import feast.proto.core.CoreServiceGrpc.CoreServiceBlockingStub;
 import feast.proto.core.EntityProto.Entity;
 import feast.proto.core.EntityProto.EntitySpecV2;
 import feast.proto.core.FeatureTableProto.FeatureTable;
@@ -52,13 +50,9 @@ public class TestUtils {
     }
   }
 
-  public static CoreSimpleAPIClient getApiClientForCore(int feastCorePort) {
-    Channel channel =
-        ManagedChannelBuilder.forAddress("localhost", feastCorePort).usePlaintext().build();
-
-    CoreServiceBlockingStub coreService = CoreServiceGrpc.newBlockingStub(channel);
-
-    return new CoreSimpleAPIClient(coreService);
+  public static RegistrySimpleAPIClient getApiClientForRegistry(
+      String bucketName, String objectName) {
+    return new RegistrySimpleAPIClient(bucketName, objectName);
   }
 
   public static GetOnlineFeaturesRequestV2 createOnlineFeatureRequest(
@@ -73,7 +67,7 @@ public class TestUtils {
   }
 
   public static void applyFeatureTable(
-      CoreSimpleAPIClient secureApiClient,
+      RegistrySimpleAPIClient secureApiClient,
       String projectName,
       String featureTableName,
       List<String> entities,
@@ -97,10 +91,10 @@ public class TestUtils {
   }
 
   public static void applyEntity(
-      CoreSimpleAPIClient coreApiClient, String projectName, EntitySpecV2 entitySpec) {
-    coreApiClient.simpleApplyEntity(projectName, entitySpec);
+      RegistrySimpleAPIClient registryClient, String projectName, EntitySpecV2 entitySpec) {
+    registryClient.simpleApplyEntity(projectName, entitySpec);
     String entityName = entitySpec.getName();
-    Entity actualEntity = coreApiClient.getEntity(projectName, entityName);
+    Entity actualEntity = registryClient.getEntity(projectName, entityName);
     assertEquals(entitySpec.getName(), actualEntity.getSpec().getName());
   }
 }

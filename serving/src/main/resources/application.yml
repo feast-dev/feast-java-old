@@ -1,8 +1,8 @@
 feast:
-  # GRPC service address for Feast Core
-  # Feast Serving requires connection to Feast Core to retrieve and reload Feast metadata (e.g. FeatureSpecs, Store information)
-  core-host: ${FEAST_CORE_HOST:localhost}
-  core-grpc-port: ${FEAST_CORE_GRPC_PORT:6565}
+  # Bucket and object name for Feast object store registry
+  # Feast Serving requires connection to object store registry to retrieve and reload Feast metadata (e.g. FeatureSpecs, Store information)
+  bucket-name: ${FEAST_BUCKET_NAME}
+  object-name: ${FEAST_OBJECT_NAME}
   
   core-authentication:
     enabled: false # should be set to true if authentication is enabled on core.
