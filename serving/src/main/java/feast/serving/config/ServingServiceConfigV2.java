@@ -20,6 +20,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.google.cloud.bigtable.data.v2.BigtableDataClient;
 import com.google.cloud.bigtable.data.v2.BigtableDataSettings;
+import com.google.protobuf.AbstractMessageLite;
 import feast.serving.registry.LocalRegistryRepo;
 import feast.serving.service.OnlineServingServiceV2;
 import feast.serving.service.ServingServiceV2;
@@ -49,7 +50,6 @@ import org.springframework.context.annotation.Lazy;
 
 @Configuration
 public class ServingServiceConfigV2 {
-  private static final Logger log = org.slf4j.LoggerFactory.getLogger(ServingServiceConfigV2.class);
 
   @Autowired private ApplicationContext context;
 
@@ -75,18 +75,17 @@ public class ServingServiceConfigV2 {
     FeastProperties.Store store = feastProperties.getActiveStore();
 
     OnlineRetrieverV2 retrieverV2;
-    log.info("Online Store Type: {}", store.getType());
     switch (store.getType()) {
       case REDIS_CLUSTER:
         RedisClientAdapter redisClusterClient =
             RedisClusterClient.create(store.getRedisClusterConfig());
-        retrieverV2 = new OnlineRetriever(redisClusterClient, (e -> e.toByteArray()));
+        retrieverV2 = new OnlineRetriever(redisClusterClient, (AbstractMessageLite::toByteArray));
         break;
       case REDIS:
         RedisClientAdapter redisClient = RedisClient.create(store.getRedisConfig());
         final EntityKeySerializer serializer;
         if (feastProperties.getRegistry() != null) {
-          serializer = (e -> e.toByteArray());
+          serializer = (AbstractMessageLite::toByteArray);
         } else {
           serializer = new EntityKeySerializerV2();
         }
