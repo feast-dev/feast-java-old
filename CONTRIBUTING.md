@@ -109,6 +109,8 @@ docker run --name redis --rm -it -d -p 6379:6379 redis:5-alpine
 > in order to serve features. See the [Feast Core section](#feast-core) for
 > how to get a Feast Core instance running.  
  
+ 
+ 
 ### Configuration
 Feast Serving is configured using it's [application.yml](https://docs.feast.dev/reference/configuration-reference#1-feast-core-and-feast-online-serving).
 
