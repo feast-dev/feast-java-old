@@ -27,7 +27,6 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -46,7 +45,6 @@ public class SpecServiceConfig {
     this.feastCachedSpecServiceRefreshInterval = feastProperties.getCoreCacheRefreshInterval();
   }
 
-  @ConditionalOnProperty(name = "feast.registry", matchIfMissing = true)
   @Bean
   public ScheduledExecutorService cachedSpecServiceScheduledExecutorService(
       CachedSpecService cachedSpecStorage) {
@@ -61,7 +59,6 @@ public class SpecServiceConfig {
     return scheduledExecutorService;
   }
 
-  @ConditionalOnProperty(name = "feast.registry", matchIfMissing = true)
   @Bean
   public CachedSpecService specService(ObjectProvider<CallCredentials> callCredentials)
       throws InvalidProtocolBufferException, JsonProcessingException {

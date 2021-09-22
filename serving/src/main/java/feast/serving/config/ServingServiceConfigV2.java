@@ -84,9 +84,9 @@ public class ServingServiceConfigV2 {
         RedisClientAdapter redisClient = RedisClient.create(store.getRedisConfig());
         final EntityKeySerializer serializer;
         if (feastProperties.getRegistry() != null) {
-          serializer = (AbstractMessageLite::toByteArray);
-        } else {
           serializer = new EntityKeySerializerV2();
+        } else {
+          serializer = (AbstractMessageLite::toByteArray);
         }
         retrieverV2 = new OnlineRetriever(redisClient, serializer);
         break;
