@@ -30,7 +30,6 @@ import io.lettuce.core.RedisFuture;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
 
 public class OnlineRetriever implements OnlineRetrieverV2 {
   private static final String timestampPrefix = "_ts";
