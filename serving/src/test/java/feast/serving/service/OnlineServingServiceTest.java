@@ -61,7 +61,8 @@ public class OnlineServingServiceTest {
   @Before
   public void setUp() {
     initMocks(this);
-    onlineServingServiceV2 = new OnlineServingServiceV2(retrieverV2, specService, tracer);
+    onlineServingServiceV2 =
+        new OnlineServingServiceV2(retrieverV2, specService, tracer, featureSpecRetriever);
 
     mockedFeatureRows = new ArrayList<>();
     mockedFeatureRows.add(

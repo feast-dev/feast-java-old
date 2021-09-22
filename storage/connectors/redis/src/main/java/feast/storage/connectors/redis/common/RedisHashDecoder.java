@@ -39,7 +39,7 @@ public class RedisHashDecoder {
    */
   public static List<Feature> retrieveFeature(
       List<KeyValue<byte[], byte[]>> redisHashValues,
-      Map<String, ServingAPIProto.FeatureReferenceV2> byteToFeatureReferenceMap,
+      Map<byte[], ServingAPIProto.FeatureReferenceV2> byteToFeatureReferenceMap,
       String timestampPrefix)
       throws InvalidProtocolBufferException {
     List<Feature> allFeatures = new ArrayList<>();
@@ -57,7 +57,7 @@ public class RedisHashDecoder {
           featureTableTimestampMap.put(new String(redisValueK), eventTimestamp);
         } else {
           ServingAPIProto.FeatureReferenceV2 featureReference =
-              byteToFeatureReferenceMap.get(redisValueK.toString());
+              byteToFeatureReferenceMap.get(redisValueK);
           ValueProto.Value featureValue = ValueProto.Value.parseFrom(redisValueV);
 
           featureMap.put(featureReference, featureValue);

@@ -30,14 +30,18 @@ import io.lettuce.core.RedisFuture;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
 
 public class OnlineRetriever implements OnlineRetrieverV2 {
+  private static final Logger log = org.slf4j.LoggerFactory.getLogger(OnlineRetriever.class);
 
   private static final String timestampPrefix = "_ts";
-  private RedisClientAdapter redisClientAdapter;
+  private final RedisClientAdapter redisClientAdapter;
+  private final EntityKeySerializer keySerializer;
 
-  public OnlineRetriever(RedisClientAdapter redisClientAdapter) {
+  public OnlineRetriever(RedisClientAdapter redisClientAdapter, EntityKeySerializer keySerializer) {
     this.redisClientAdapter = redisClientAdapter;
+    this.keySerializer = keySerializer;
   }
 
   @Override
@@ -58,11 +62,11 @@ public class OnlineRetriever implements OnlineRetrieverV2 {
       List<ServingAPIProto.FeatureReferenceV2> featureReferences) {
     List<List<Feature>> features = new ArrayList<>();
     // To decode bytes back to Feature Reference
-    Map<String, ServingAPIProto.FeatureReferenceV2> byteToFeatureReferenceMap = new HashMap<>();
+    Map<byte[], ServingAPIProto.FeatureReferenceV2> byteToFeatureReferenceMap = new HashMap<>();
 
     // Serialize using proto
     List<byte[]> binaryRedisKeys =
-        redisKeys.stream().map(redisKey -> redisKey.toByteArray()).collect(Collectors.toList());
+        redisKeys.stream().map(this.keySerializer::serialize).collect(Collectors.toList());
 
     List<byte[]> featureReferenceWithTsByteList = new ArrayList<>();
     featureReferences.stream()
@@ -73,7 +77,7 @@ public class OnlineRetriever implements OnlineRetrieverV2 {
               byte[] featureReferenceBytes =
                   RedisHashDecoder.getFeatureReferenceRedisHashKeyBytes(featureReference);
               featureReferenceWithTsByteList.add(featureReferenceBytes);
-              byteToFeatureReferenceMap.put(featureReferenceBytes.toString(), featureReference);
+              byteToFeatureReferenceMap.put(featureReferenceBytes, featureReference);
 
               // eg. <_ts:featuretable_name>
               byte[] featureTableTsBytes =
@@ -93,13 +97,26 @@ public class OnlineRetriever implements OnlineRetrieverV2 {
     // Write all commands to the transport layer
     redisClientAdapter.flushCommands();
 
+    for (final Map.Entry<byte[], ServingAPIProto.FeatureReferenceV2> entry :
+        byteToFeatureReferenceMap.entrySet()) {
+      log.info("Map Entry Key: {} Value: {}", entry.getKey(), entry.getValue());
+    }
+
     futures.forEach(
         future -> {
           try {
             List<KeyValue<byte[], byte[]>> redisValuesList = future.get();
+            log.info("Redis values list: {}", redisValuesList);
+            for (KeyValue<byte[], byte[]> keyValue : redisValuesList) {
+              log.info("Key: {}, Value: {}", keyValue.getKey(), keyValue.getValue());
+            }
+
             List<Feature> curRedisKeyFeatures =
                 RedisHashDecoder.retrieveFeature(
                     redisValuesList, byteToFeatureReferenceMap, timestampPrefix);
+            for (final Feature feature : curRedisKeyFeatures) {
+              log.info("Found features: {}", feature);
+            }
             features.add(curRedisKeyFeatures);
           } catch (InterruptedException | ExecutionException | InvalidProtocolBufferException e) {
             throw Status.UNKNOWN
