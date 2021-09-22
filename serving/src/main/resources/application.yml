@@ -4,8 +4,6 @@ feast:
   core-host: ${FEAST_CORE_HOST:localhost}
   core-grpc-port: ${FEAST_CORE_GRPC_PORT:6565}
 
-  registry: "/Users/achal/tecton/feast/prompt_dory/data/registry.db"
-
   core-authentication:
     enabled: false # should be set to true if authentication is enabled on core.
     provider: google # can be set to `oauth` or `google`
