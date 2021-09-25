@@ -26,8 +26,11 @@ import feast.storage.api.retriever.ProtoFeature;
 import io.lettuce.core.KeyValue;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import org.slf4j.Logger;
 
 public class RedisHashDecoder {
+
+  private static final Logger log = org.slf4j.LoggerFactory.getLogger(RedisHashDecoder.class);
 
   /**
    * Converts all retrieved Redis Hash values based on EntityRows into {@link Feature}
@@ -39,7 +42,7 @@ public class RedisHashDecoder {
    */
   public static List<Feature> retrieveFeature(
       List<KeyValue<byte[], byte[]>> redisHashValues,
-      Map<String, ServingAPIProto.FeatureReferenceV2> byteToFeatureReferenceMap,
+      Map<byte[], ServingAPIProto.FeatureReferenceV2> byteToFeatureReferenceMap,
       String timestampPrefix)
       throws InvalidProtocolBufferException {
     List<Feature> allFeatures = new ArrayList<>();
@@ -57,7 +60,7 @@ public class RedisHashDecoder {
           featureTableTimestampMap.put(new String(redisValueK), eventTimestamp);
         } else {
           ServingAPIProto.FeatureReferenceV2 featureReference =
-              byteToFeatureReferenceMap.get(redisValueK.toString());
+              byteToFeatureReferenceMap.get(redisValueK);
           ValueProto.Value featureValue = ValueProto.Value.parseFrom(redisValueV);
 
           featureMap.put(featureReference, featureValue);

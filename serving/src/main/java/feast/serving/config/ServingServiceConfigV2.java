@@ -41,6 +41,7 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -49,6 +50,7 @@ import org.springframework.context.annotation.Lazy;
 
 @Configuration
 public class ServingServiceConfigV2 {
+  private static final Logger log = org.slf4j.LoggerFactory.getLogger(ServingServiceConfigV2.class);
 
   @Autowired private ApplicationContext context;
 
@@ -84,8 +86,10 @@ public class ServingServiceConfigV2 {
         RedisClientAdapter redisClient = RedisClient.create(store.getRedisConfig());
         final EntityKeySerializer serializer;
         if (feastProperties.getRegistry() != null) {
+          log.info("Created EntityKeySerializerV2");
           serializer = new EntityKeySerializerV2();
         } else {
+          log.info("Using byteArray method");
           serializer = (AbstractMessageLite::toByteArray);
         }
         retrieverV2 = new OnlineRetriever(redisClient, serializer);
@@ -126,10 +130,12 @@ public class ServingServiceConfigV2 {
 
     final FeatureSpecRetriever featureSpecRetriever;
     if (feastProperties.getRegistry() != null) {
+      log.info("Created RegistryFeatureSpecRetriever");
       final LocalRegistryRepo repo =
           new LocalRegistryRepo(Paths.get(feastProperties.getRegistry()));
       featureSpecRetriever = new RegistryFeatureSpecRetriever(repo);
     } else {
+      log.info("Created CoreFeatureSpecRetriever");
       featureSpecRetriever = new CoreFeatureSpecRetriever(specService);
     }
 
