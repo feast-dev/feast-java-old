@@ -64,7 +64,7 @@ jobs:
           architecture: x64
       - uses: actions/setup-python@v2
         with:
-          python-version: '3.6'
+          python-version: '3.7'
           architecture: 'x64'
       - name: Install Feast CLI
         run: pip install -U pip; pip install -e "deps/feast/sdk/python"
