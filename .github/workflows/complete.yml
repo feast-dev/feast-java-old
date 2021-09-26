@@ -46,7 +46,7 @@ jobs:
       redis:
         image: redis
         ports:
-          - 6379:6379
+          - 6389:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -68,6 +68,11 @@ jobs:
           architecture: 'x64'
       - name: Install Feast CLI
         run: pip install -U pip; pip install -e "deps/feast/sdk/python"
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+  #      - name: Apply and Materialize
+  #        run: feast --chdir ./serving/src/test/resources/feast_project/example.py apply; feast --chdir ./serving/src/test/resources/feast_project/example.py materialize
       - uses: actions/cache@v2
         with:
           path: ~/.m2/repository
