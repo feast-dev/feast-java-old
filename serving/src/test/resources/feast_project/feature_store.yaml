@@ -1,6 +1,8 @@
 project: prompt_dory
 provider: local
-online_store: redis
+online_store:
+  type: redis
+  connection_string: localhost:6389
 offline_store: {}
 flags:
   alpha_features: true
