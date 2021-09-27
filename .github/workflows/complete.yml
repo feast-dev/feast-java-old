@@ -72,7 +72,7 @@ jobs:
         id: date
         run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
       - name: Apply and Materialize
-        run: feast --chdir ./serving/src/test/resources/feast_project/example.py apply; feast --chdir ./serving/src/test/resources/feast_project/example.py materialize-incremental ${{steps.date.outputs.date}}
+        run: feast --chdir ./serving/src/test/resources/feast_project apply; feast --chdir ./serving/src/test/resources/feast_project materialize-incremental ${{steps.date.outputs.date}}
       - uses: actions/cache@v2
         with:
           path: ~/.m2/repository
