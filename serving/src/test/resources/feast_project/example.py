@@ -3,7 +3,7 @@
 from google.protobuf.duration_pb2 import Duration
 import pandas as pd
 
-from feast import Entity, Feature, FeatureView, FileSource, ValueType, FeatureService, OnDemandFeatureView
+from feast import Entity, Feature, FeatureView, FileSource, ValueType, FeatureService
 
 # Read data from parquet files. Parquet is convenient for local development mode. For
 # production, you can use your favorite DWH, such as BigQuery. See Feast documentation
@@ -46,11 +46,3 @@ def conv_rate_plus_100(driver_hourly_stats: pd.DataFrame) -> pd.DataFrame:
     df["conv_rate_plus_100"] = driver_hourly_stats["conv_rate"] + 100
     return df
 
-
-odfv = OnDemandFeatureView(
-    name=conv_rate_plus_100.__name__,
-    inputs={"driver": driver_hourly_stats_view},
-    # features=[Feature("conv_rate_plus_100", ValueType.FLOAT)],
-    features=[],
-    udf=conv_rate_plus_100,
-)
