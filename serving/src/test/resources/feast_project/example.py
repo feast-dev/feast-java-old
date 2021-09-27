@@ -1,15 +1,17 @@
 # This is an example feature definition file
 
-from google.protobuf.duration_pb2 import Duration
 import pandas as pd
+from pathlib import Path
+from google.protobuf.duration_pb2 import Duration
 
 from feast import Entity, Feature, FeatureView, FileSource, ValueType, FeatureService
 
 # Read data from parquet files. Parquet is convenient for local development mode. For
 # production, you can use your favorite DWH, such as BigQuery. See Feast documentation
 # for more info.
+path = str(Path(__file__).parent / "/data/driver_stats.parquet")
 driver_hourly_stats = FileSource(
-    path="data/driver_stats.parquet",
+    path=path,
     event_timestamp_column="event_timestamp",
     created_timestamp_column="created",
 )
