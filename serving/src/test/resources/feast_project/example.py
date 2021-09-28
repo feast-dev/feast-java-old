@@ -9,9 +9,10 @@ from feast import Entity, Feature, FeatureView, FileSource, ValueType, FeatureSe
 # Read data from parquet files. Parquet is convenient for local development mode. For
 # production, you can use your favorite DWH, such as BigQuery. See Feast documentation
 # for more info.
-path = str(Path(__file__).parent / "/data/driver_stats.parquet")
+file_path = str(Path(__file__).parent / "/data/driver_stats.parquet")
+print(f"Using file path: {file_path}")
 driver_hourly_stats = FileSource(
-    path=path,
+    path=file_path,
     event_timestamp_column="event_timestamp",
     created_timestamp_column="created",
 )
