@@ -1,4 +1,4 @@
-project: prompt_dory
+project: feast_project
 provider: local
 online_store:
   type: redis

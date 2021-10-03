@@ -16,8 +16,6 @@
  */
 package feast.serving.config;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.google.protobuf.InvalidProtocolBufferException;
 import feast.serving.specs.CachedSpecService;
 import feast.serving.specs.CoreSpecService;
 import io.grpc.CallCredentials;
@@ -28,15 +26,16 @@ import org.slf4j.Logger;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class SpecServiceConfig {
 
   private static final Logger log = org.slf4j.LoggerFactory.getLogger(SpecServiceConfig.class);
-  private String feastCoreHost;
-  private int feastCorePort;
-  private int feastCachedSpecServiceRefreshInterval;
+  private final String feastCoreHost;
+  private final int feastCorePort;
+  private final int feastCachedSpecServiceRefreshInterval;
 
   @Autowired
   public SpecServiceConfig(FeastProperties feastProperties) {
@@ -46,6 +45,7 @@ public class SpecServiceConfig {
   }
 
   @Bean
+  @Conditional(CoreCondition.class)
   public ScheduledExecutorService cachedSpecServiceScheduledExecutorService(
       CachedSpecService cachedSpecStorage) {
     ScheduledExecutorService scheduledExecutorService =
@@ -60,8 +60,8 @@ public class SpecServiceConfig {
   }
 
   @Bean
-  public CachedSpecService specService(ObjectProvider<CallCredentials> callCredentials)
-      throws InvalidProtocolBufferException, JsonProcessingException {
+  @Conditional(CoreCondition.class)
+  public CachedSpecService specService(ObjectProvider<CallCredentials> callCredentials) {
     CoreSpecService coreService =
         new CoreSpecService(feastCoreHost, feastCorePort, callCredentials);
     CachedSpecService cachedSpecStorage = new CachedSpecService(coreService);

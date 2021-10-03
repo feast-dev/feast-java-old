@@ -1,7 +1,6 @@
 # This is an example feature definition file
 
 import pandas as pd
-from pathlib import Path
 from google.protobuf.duration_pb2 import Duration
 
 from feast import Entity, Feature, FeatureView, FileSource, ValueType, FeatureService
@@ -10,7 +9,6 @@ from feast import Entity, Feature, FeatureView, FileSource, ValueType, FeatureSe
 # production, you can use your favorite DWH, such as BigQuery. See Feast documentation
 # for more info.
 file_path = "./serving/src/test/resources/feast_project/data/driver_stats.parquet"
-print(f"Using file path: {file_path}")
 driver_hourly_stats = FileSource(
     path=file_path,
     event_timestamp_column="event_timestamp",

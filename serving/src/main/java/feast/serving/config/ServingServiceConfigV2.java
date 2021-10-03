@@ -45,6 +45,7 @@ import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 
@@ -70,10 +71,11 @@ public class ServingServiceConfigV2 {
   }
 
   @Bean
+  @Conditional(CoreCondition.class)
   public ServingServiceV2 servingServiceV2(
       FeastProperties feastProperties, CachedSpecService specService, Tracer tracer) {
-    ServingServiceV2 servingService = null;
-    FeastProperties.Store store = feastProperties.getActiveStore();
+    final ServingServiceV2 servingService;
+    final FeastProperties.Store store = feastProperties.getActiveStore();
 
     OnlineRetrieverV2 retrieverV2;
     switch (store.getType()) {
@@ -84,15 +86,7 @@ public class ServingServiceConfigV2 {
         break;
       case REDIS:
         RedisClientAdapter redisClient = RedisClient.create(store.getRedisConfig());
-        final EntityKeySerializer serializer;
-        if (feastProperties.getRegistry() != null) {
-          log.info("Created EntityKeySerializerV2");
-          serializer = new EntityKeySerializerV2();
-        } else {
-          log.info("Using byteArray method");
-          serializer = (AbstractMessageLite::toByteArray);
-        }
-        retrieverV2 = new OnlineRetriever(redisClient, serializer);
+        retrieverV2 = new OnlineRetriever(redisClient, (AbstractMessageLite::toByteArray));
         break;
       case BIGTABLE:
         BigtableDataClient bigtableClient = context.getBean(BigtableDataClient.class);
@@ -129,15 +123,44 @@ public class ServingServiceConfigV2 {
     }
 
     final FeatureSpecRetriever featureSpecRetriever;
-    if (feastProperties.getRegistry() != null) {
-      log.info("Created RegistryFeatureSpecRetriever");
-      final LocalRegistryRepo repo =
-          new LocalRegistryRepo(Paths.get(feastProperties.getRegistry()));
-      featureSpecRetriever = new RegistryFeatureSpecRetriever(repo);
-    } else {
-      log.info("Created CoreFeatureSpecRetriever");
-      featureSpecRetriever = new CoreFeatureSpecRetriever(specService);
+    log.info("Created CoreFeatureSpecRetriever");
+    featureSpecRetriever = new CoreFeatureSpecRetriever(specService);
+
+    servingService = new OnlineServingServiceV2(retrieverV2, tracer, featureSpecRetriever);
+
+    return servingService;
+  }
+
+  @Bean
+  @Conditional(RegistryCondition.class)
+  public ServingServiceV2 registryBasedServingServiceV2(
+      FeastProperties feastProperties, Tracer tracer) {
+    final ServingServiceV2 servingService;
+    final FeastProperties.Store store = feastProperties.getActiveStore();
+
+    OnlineRetrieverV2 retrieverV2;
+    switch (store.getType()) {
+      case REDIS_CLUSTER:
+        RedisClientAdapter redisClusterClient =
+            RedisClusterClient.create(store.getRedisClusterConfig());
+        retrieverV2 = new OnlineRetriever(redisClusterClient, new EntityKeySerializerV2());
+        break;
+      case REDIS:
+        RedisClientAdapter redisClient = RedisClient.create(store.getRedisConfig());
+        log.info("Created EntityKeySerializerV2");
+        retrieverV2 = new OnlineRetriever(redisClient, new EntityKeySerializerV2());
+        break;
+      default:
+        throw new RuntimeException(
+            String.format(
+                "Unable to identify online store type: %s for Regsitry Backed Serving Service",
+                store.getType()));
     }
+
+    final FeatureSpecRetriever featureSpecRetriever;
+    log.info("Created RegistryFeatureSpecRetriever");
+    final LocalRegistryRepo repo = new LocalRegistryRepo(Paths.get(feastProperties.getRegistry()));
+    featureSpecRetriever = new RegistryFeatureSpecRetriever(repo);
 
     servingService = new OnlineServingServiceV2(retrieverV2, tracer, featureSpecRetriever);
 
