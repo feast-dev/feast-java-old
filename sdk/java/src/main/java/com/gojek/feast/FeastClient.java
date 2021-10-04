@@ -25,30 +25,18 @@ import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
 import feast.proto.serving.ServingServiceGrpc;
 import feast.proto.serving.ServingServiceGrpc.ServingServiceBlockingStub;
 import io.grpc.CallCredentials;
+import io.grpc.Channel;
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
-import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
-import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
-import io.opentracing.contrib.grpc.TracingClientInterceptor;
-import io.opentracing.util.GlobalTracer;
-import java.io.File;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import javax.net.ssl.SSLException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @SuppressWarnings("WeakerAccess")
-public class FeastClient implements AutoCloseable {
+public class FeastClient extends GrpcManager<ServingServiceBlockingStub> {
   Logger logger = LoggerFactory.getLogger(FeastClient.class);
-
-  private static final int CHANNEL_SHUTDOWN_TIMEOUT_SEC = 5;
-
-  private final ManagedChannel channel;
-  private final ServingServiceBlockingStub stub;
 
   /**
    * Create a client to access Feast Serving.
@@ -73,33 +61,7 @@ public class FeastClient implements AutoCloseable {
    * @return {@link FeastClient}
    */
   public static FeastClient createSecure(String host, int port, SecurityConfig securityConfig) {
-    // Configure client TLS
-    ManagedChannel channel = null;
-    if (securityConfig.isTLSEnabled()) {
-      if (securityConfig.getCertificatePath().isPresent()) {
-        String certificatePath = securityConfig.getCertificatePath().get();
-        // Use custom certificate for TLS
-        File certificateFile = new File(certificatePath);
-        try {
-          channel =
-              NettyChannelBuilder.forAddress(host, port)
-                  .useTransportSecurity()
-                  .sslContext(GrpcSslContexts.forClient().trustManager(certificateFile).build())
-                  .build();
-        } catch (SSLException e) {
-          throw new IllegalArgumentException(
-              String.format("Invalid Certificate provided at path: %s", certificatePath), e);
-        }
-      } else {
-        // Use system certificates for TLS
-        channel = ManagedChannelBuilder.forAddress(host, port).useTransportSecurity().build();
-      }
-    } else {
-      // Disable TLS
-      channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build();
-    }
-
-    return new FeastClient(channel, securityConfig.getCredentials());
+    return new FeastClient(host, port, securityConfig);
   }
 
   /**
@@ -188,24 +150,16 @@ public class FeastClient implements AutoCloseable {
         .collect(Collectors.toList());
   }
 
-  protected FeastClient(ManagedChannel channel, Optional<CallCredentials> credentials) {
-    this.channel = channel;
-    TracingClientInterceptor tracingInterceptor =
-        TracingClientInterceptor.newBuilder().withTracer(GlobalTracer.get()).build();
-
-    ServingServiceBlockingStub servingStub =
-        ServingServiceGrpc.newBlockingStub(tracingInterceptor.intercept(channel));
-
-    if (credentials.isPresent()) {
-      servingStub = servingStub.withCallCredentials(credentials.get());
-    }
-
-    this.stub = servingStub;
+  @Override
+  protected ServingServiceBlockingStub getStub(Channel channel) {
+    return ServingServiceGrpc.newBlockingStub(channel);
   }
 
-  public void close() throws Exception {
-    if (channel != null) {
-      channel.shutdown().awaitTermination(CHANNEL_SHUTDOWN_TIMEOUT_SEC, TimeUnit.SECONDS);
-    }
+  protected FeastClient(ManagedChannel channel, Optional<CallCredentials> credentials) {
+    super(channel, credentials);
+  }
+
+  protected FeastClient(String host, int port, SecurityConfig securityConfig) {
+    super(host, port, securityConfig);
   }
 }
