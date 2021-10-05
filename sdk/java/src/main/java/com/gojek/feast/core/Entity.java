@@ -29,7 +29,6 @@ public class Entity {
     private final String project;
     private final ValueType value;
     private final String description;
-    private final String joinKey;
     private final Map<String, String> labels;
 
     protected Spec(
@@ -37,13 +36,11 @@ public class Entity {
         String name,
         ValueType value,
         String description,
-        String joinKey,
         Map<String, String> labels) {
       this.name = name;
       this.project = project;
       this.value = value;
       this.description = description;
-      this.joinKey = joinKey;
       this.labels = labels;
     }
 
@@ -56,7 +53,6 @@ public class Entity {
       private final String project;
       private ValueType value;
       private String description;
-      private String joinKey;
       private final Map<String, String> labels = new HashMap<>();
 
       private Builder(String project, String name) {
@@ -74,11 +70,6 @@ public class Entity {
         return this;
       }
 
-      public Builder setJoinKey(String joinKey) {
-        this.joinKey = joinKey;
-        return this;
-      }
-
       public Builder addLabel(String key, String val) {
         this.labels.put(key, val);
         return this;
@@ -90,7 +81,7 @@ public class Entity {
       }
 
       public Spec build() {
-        return new Spec(project, name, value, description, joinKey, labels);
+        return new Spec(project, name, value, description, labels);
       }
     }
 
@@ -110,30 +101,23 @@ public class Entity {
       return description;
     }
 
-    public String getJoinKey() {
-      return joinKey;
-    }
-
     public Map<String, String> getLabels() {
       return labels;
     }
 
-    protected Spec(EntityProto.EntitySpecV2 spec) {
+    protected Spec(String project, EntityProto.EntitySpecV2 spec) {
+      this.project = project;
       this.name = spec.getName();
-      this.project = spec.getProject();
       this.value = ValueType.fromProto(spec.getValueType());
       this.description = spec.getDescription();
-      this.joinKey = spec.getJoinKey();
       this.labels = spec.getLabelsMap();
     }
 
     protected EntityProto.EntitySpecV2 toProto() {
       return EntityProto.EntitySpecV2.newBuilder()
           .setName(name)
-          .setProject(project)
           .setValueType(value.toProto())
           .setDescription(description)
-          .setJoinKey(joinKey)
           .putAllLabels(labels)
           .build();
     }
@@ -147,8 +131,8 @@ public class Entity {
     return metadata;
   }
 
-  protected Entity(EntityProto.Entity entity) {
-    if (entity.hasSpec()) this.spec = new Spec(entity.getSpec());
+  protected Entity(String project, EntityProto.Entity entity) {
+    if (entity.hasSpec()) this.spec = new Spec(project, entity.getSpec());
     if (entity.hasMeta()) this.metadata = new Metadata(entity.getMeta());
   }
 

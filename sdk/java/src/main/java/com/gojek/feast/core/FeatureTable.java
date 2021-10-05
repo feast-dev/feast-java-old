@@ -138,8 +138,8 @@ public class FeatureTable {
       return Optional.ofNullable(maxAge);
     }
 
-    protected Spec(FeatureTableProto.FeatureTableSpec spec) {
-      this.project = spec.getProject();
+    protected Spec(String project, FeatureTableProto.FeatureTableSpec spec) {
+      this.project = project;
       this.name = spec.getName();
       this.entities = spec.getEntitiesList();
       this.features =
@@ -153,7 +153,6 @@ public class FeatureTable {
     protected FeatureTableProto.FeatureTableSpec toProto() {
       FeatureTableProto.FeatureTableSpec.Builder builder =
           FeatureTableProto.FeatureTableSpec.newBuilder()
-              .setProject(project)
               .setName(name)
               .addAllEntities(entities)
               .addAllFeatures(features.stream().map(Feature::toProto).collect(Collectors.toList()))
@@ -177,8 +176,8 @@ public class FeatureTable {
     return metadata;
   }
 
-  protected FeatureTable(FeatureTableProto.FeatureTable featureTable) {
-    if (featureTable.hasSpec()) this.spec = new Spec(featureTable.getSpec());
+  protected FeatureTable(String project, FeatureTableProto.FeatureTable featureTable) {
+    if (featureTable.hasSpec()) this.spec = new Spec(project, featureTable.getSpec());
     if (featureTable.hasMeta()) this.metadata = new Metadata(featureTable.getMeta());
   }
 

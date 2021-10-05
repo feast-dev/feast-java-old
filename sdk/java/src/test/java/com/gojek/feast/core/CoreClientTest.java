@@ -57,7 +57,6 @@ public class CoreClientTest {
         Entity.Spec.getBuilder(CoreServiceImplMock.PROJECT, name)
             .setValue(ValueType.BOOL)
             .setDescription("description")
-            .setJoinKey("joinKey")
             .build();
     client.apply(spec);
     Assertions.assertEquals(

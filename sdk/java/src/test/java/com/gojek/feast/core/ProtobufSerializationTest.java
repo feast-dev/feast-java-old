@@ -50,13 +50,11 @@ public class ProtobufSerializationTest {
             .setSpec(
                 EntityProto.EntitySpecV2.newBuilder()
                     .setName("name")
-                    .setProject("project")
                     .setDescription("description")
                     .setValueType(ValueProto.ValueType.Enum.BOOL_LIST)
-                    .setJoinKey("joinKey")
                     .putLabels("key", "val"))
             .build();
-    Entity entity = new Entity(protoEntity);
+    Entity entity = new Entity("project", protoEntity);
     Assert.assertEquals(protoEntity, entity.toProto());
   }
 
@@ -83,13 +81,12 @@ public class ProtobufSerializationTest {
             .setSpec(
                 FeatureTableProto.FeatureTableSpec.newBuilder()
                     .setName("name")
-                    .setProject("project")
                     .setMaxAge(Duration.newBuilder().setSeconds(10).setNanos(10))
                     .addEntities("entity")
                     .putLabels("key", "val")
                     .addFeatures(FeatureProto.FeatureSpecV2.getDefaultInstance()))
             .build();
-    FeatureTable featureTable = new FeatureTable(featureTableProto);
+    FeatureTable featureTable = new FeatureTable("project", featureTableProto);
     Assert.assertEquals(featureTableProto, featureTable.toProto());
   }
 }
