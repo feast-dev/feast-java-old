@@ -124,7 +124,8 @@ public class CoreClient extends GrpcManager<CoreServiceBlockingStub> {
             .setProject(entitySpec.getProject())
             .setSpec(entitySpec.toProto());
     CoreServiceProto.ApplyEntityResponse response = stub.applyEntity(request.build());
-    Entity entity = response.hasEntity() ? new Entity(entitySpec.getProject(), response.getEntity()) : null;
+    Entity entity =
+        response.hasEntity() ? new Entity(entitySpec.getProject(), response.getEntity()) : null;
     return Optional.ofNullable(entity);
   }
 
@@ -167,7 +168,8 @@ public class CoreClient extends GrpcManager<CoreServiceBlockingStub> {
     CoreServiceProto.GetFeatureTableRequest.Builder request =
         CoreServiceProto.GetFeatureTableRequest.newBuilder().setProject(project).setName(name);
     CoreServiceProto.GetFeatureTableResponse response = stub.getFeatureTable(request.build());
-    FeatureTable featureTable = response.hasTable() ? new FeatureTable(project, response.getTable()) : null;
+    FeatureTable featureTable =
+        response.hasTable() ? new FeatureTable(project, response.getTable()) : null;
     return Optional.ofNullable(featureTable);
   }
 
@@ -184,7 +186,10 @@ public class CoreClient extends GrpcManager<CoreServiceBlockingStub> {
             .setProject(featureTableSpec.getProject())
             .setTableSpec(featureTableSpec.toProto());
     CoreServiceProto.ApplyFeatureTableResponse response = stub.applyFeatureTable(request.build());
-    FeatureTable featureTable = response.hasTable() ? new FeatureTable(featureTableSpec.getProject(), response.getTable()) : null;
+    FeatureTable featureTable =
+        response.hasTable()
+            ? new FeatureTable(featureTableSpec.getProject(), response.getTable())
+            : null;
     return Optional.ofNullable(featureTable);
   }
 
@@ -213,7 +218,9 @@ public class CoreClient extends GrpcManager<CoreServiceBlockingStub> {
         CoreServiceProto.ListFeatureTablesRequest.newBuilder().setFilter(filter).build();
     List<FeatureTableProto.FeatureTable> featureTables =
         stub.listFeatureTables(request).getTablesList();
-    return featureTables.stream().map(proto -> new FeatureTable(project, proto)).collect(Collectors.toList());
+    return featureTables.stream()
+        .map(proto -> new FeatureTable(project, proto))
+        .collect(Collectors.toList());
   }
 
   /**
