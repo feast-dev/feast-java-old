@@ -35,6 +35,8 @@ import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.codec.ByteArrayCodec;
 import java.io.File;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
 import org.junit.ClassRule;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -64,7 +66,6 @@ public class ServingServiceFeast10IT extends BaseAuthIT {
 
   static final String timestampPrefix = "_ts";
   static ServingServiceGrpc.ServingServiceBlockingStub servingStub;
-  static RedisCommands<byte[], byte[]> syncCommands;
 
   static final int FEAST_SERVING_PORT = 6568;
   @LocalServerPort private int metricsPort;
@@ -92,17 +93,11 @@ public class ServingServiceFeast10IT extends BaseAuthIT {
                 environment.getServiceHost("redis_1", REDIS_PORT),
                 environment.getServicePort("redis_1", REDIS_PORT),
                 java.time.Duration.ofMillis(2000)));
-    StatefulRedisConnection<byte[], byte[]> connection = redisClient.connect(new ByteArrayCodec());
-    syncCommands = connection.sync();
-
-    List<byte[]> keys = syncCommands.keys("*".getBytes());
-
-    log.info("Keys: {}", keys);
   }
 
   @AfterAll
   static void tearDown() {
-    ((ManagedChannel) servingStub.getChannel()).shutdown();
+    ((ManagedChannel) servingStub.getChannel()).shutdown().awaitTermination(10, TimeUnit.SECONDS);
   }
 
   @Test
@@ -110,7 +105,6 @@ public class ServingServiceFeast10IT extends BaseAuthIT {
     // getOnlineFeatures Information
     String projectName = "feast_project";
     String entityName = "driver_id";
-    ValueProto.Value entityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
 
     // Instantiate EntityRows
     final Timestamp timestamp = Timestamp.getDefaultInstance();
