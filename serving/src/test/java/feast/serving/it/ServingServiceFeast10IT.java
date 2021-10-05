@@ -55,7 +55,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
-      "feast.registry:src/test/resources/feast_project/data/registry.db",
+      "feast.registry:src/test/resources/docker-compose/feast10/registry.db",
     })
 @Testcontainers
 public class ServingServiceFeast10IT extends BaseAuthIT {
