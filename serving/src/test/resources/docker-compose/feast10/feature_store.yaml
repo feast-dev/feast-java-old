@@ -2,6 +2,7 @@ project: feast_project
 provider: local
 online_store:
   type: redis
+  connection_string: "redis:6379"
 offline_store: {}
 flags:
   alpha_features: true

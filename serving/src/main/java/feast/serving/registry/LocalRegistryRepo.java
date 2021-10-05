@@ -23,18 +23,25 @@ import feast.proto.serving.ServingAPIProto;
 import feast.serving.exception.SpecRetrievalException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class LocalRegistryRepo implements RegistryRepository {
+  public static final Logger log = LoggerFactory.getLogger(LocalRegistryRepo.class);
 
   private final Path localRegistryPath;
 
   public LocalRegistryRepo(Path localRegistryPath) {
     this.localRegistryPath = localRegistryPath;
+    log.info("Working Directory =" + System.getProperty("user.dir"));
+    log.info("Local Registry Path: {}", this.localRegistryPath.toAbsolutePath());
+    assert this.localRegistryPath.toFile().exists();
   }
 
   @Override
   public RegistryProto.Registry getRegistry() {
     try {
+
       final byte[] registryContents = Files.readAllBytes(this.localRegistryPath);
 
       return RegistryProto.Registry.parseFrom(registryContents);

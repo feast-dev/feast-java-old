@@ -17,19 +17,15 @@
 package feast.serving.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.hash.Hashing;
 import com.google.protobuf.Timestamp;
 import feast.common.it.DataGenerator;
-import feast.common.models.FeatureV2;
-import feast.proto.core.EntityProto;
 import feast.proto.serving.ServingAPIProto;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
 import feast.proto.serving.ServingServiceGrpc;
-import feast.proto.storage.RedisProto;
 import feast.proto.types.ValueProto;
 import io.grpc.ManagedChannel;
 import io.lettuce.core.RedisClient;
@@ -37,38 +33,47 @@ import io.lettuce.core.RedisURI;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
 import io.lettuce.core.codec.ByteArrayCodec;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
+import java.io.File;
+import java.util.List;
+import org.junit.ClassRule;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.DockerComposeContainer;
+import org.testcontainers.containers.wait.strategy.WaitAllStrategy;
+import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @ActiveProfiles("it")
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
-      "feast.registry:=./serving/src/test/resources/feast_project/data/registry.db",
-      "feast.stores[0].config.port=6389"
+      "feast.registry:src/test/resources/feast_project/data/registry.db",
     })
 @Testcontainers
 public class ServingServiceFeast10IT extends BaseAuthIT {
 
-  static final Map<String, String> options = new HashMap<>();
+  public static final Logger log = LoggerFactory.getLogger(ServingServiceFeast10IT.class);
+
   static final String timestampPrefix = "_ts";
-  static CoreSimpleAPIClient coreClient;
   static ServingServiceGrpc.ServingServiceBlockingStub servingStub;
   static RedisCommands<byte[], byte[]> syncCommands;
 
   static final int FEAST_SERVING_PORT = 6568;
   @LocalServerPort private int metricsPort;
+
+  @ClassRule @Container
+  public static DockerComposeContainer environment =
+      new DockerComposeContainer(
+              new File("src/test/resources/docker-compose/docker-compose-feast10-it.yml"))
+          .withExposedService(REDIS, REDIS_PORT);
 
   @DynamicPropertySource
   static void initialize(DynamicPropertyRegistry registry) {
@@ -77,86 +82,22 @@ public class ServingServiceFeast10IT extends BaseAuthIT {
 
   @BeforeAll
   static void globalSetup() {
-    servingStub = TestUtils.getServingServiceStub(false, FEAST_SERVING_PORT, null);
 
+    environment.waitingFor("materialize", new WaitAllStrategy());
+
+    servingStub = TestUtils.getServingServiceStub(false, FEAST_SERVING_PORT, null);
     RedisClient redisClient =
-        RedisClient.create(new RedisURI("localhost", 6389, Duration.ofMillis(2000)));
+        RedisClient.create(
+            new RedisURI(
+                environment.getServiceHost("redis_1", REDIS_PORT),
+                environment.getServicePort("redis_1", REDIS_PORT),
+                java.time.Duration.ofMillis(2000)));
     StatefulRedisConnection<byte[], byte[]> connection = redisClient.connect(new ByteArrayCodec());
     syncCommands = connection.sync();
 
-    String projectName = "default";
-    // Apply Entity
-    String entityName = "driver_id";
-    ValueProto.Value entityValue = ValueProto.Value.newBuilder().setInt64Val(1).build();
-    String description = "My driver id";
-    ValueProto.ValueType.Enum entityType = ValueProto.ValueType.Enum.INT64;
-    EntityProto.EntitySpecV2 entitySpec =
-        EntityProto.EntitySpecV2.newBuilder()
-            .setName(entityName)
-            .setDescription(description)
-            .setValueType(entityType)
-            .build();
-    TestUtils.applyEntity(coreClient, projectName, entitySpec);
+    List<byte[]> keys = syncCommands.keys("*".getBytes());
 
-    // Apply FeatureTable
-    String featureTableName = "rides";
-
-    ServingAPIProto.FeatureReferenceV2 feature1Reference =
-        DataGenerator.createFeatureReference("rides", "trip_cost");
-    ServingAPIProto.FeatureReferenceV2 feature2Reference =
-        DataGenerator.createFeatureReference("rides", "trip_distance");
-    ServingAPIProto.FeatureReferenceV2 feature3Reference =
-        DataGenerator.createFeatureReference("rides", "trip_empty");
-    ServingAPIProto.FeatureReferenceV2 feature4Reference =
-        DataGenerator.createFeatureReference("rides", "trip_wrong_type");
-
-    // Event Timestamp
-    String eventTimestampKey = timestampPrefix + ":" + featureTableName;
-    Timestamp eventTimestampValue = Timestamp.newBuilder().setSeconds(100).build();
-
-    // Serialize Redis Key with Entity i.e <default_driver_id_1>
-    RedisProto.RedisKeyV2 redisKey =
-        RedisProto.RedisKeyV2.newBuilder()
-            .setProject(projectName)
-            .addEntityNames(entityName)
-            .addEntityValues(entityValue)
-            .build();
-
-    ImmutableMap<ServingAPIProto.FeatureReferenceV2, ValueProto.Value> featureReferenceValueMap =
-        ImmutableMap.of(
-            feature1Reference,
-            DataGenerator.createInt64Value(42),
-            feature2Reference,
-            DataGenerator.createDoubleValue(42.2),
-            feature3Reference,
-            DataGenerator.createEmptyValue(),
-            feature4Reference,
-            DataGenerator.createDoubleValue(42.2));
-
-    // Insert timestamp into Redis and isTimestampMap only once
-    syncCommands.hset(
-        redisKey.toByteArray(), eventTimestampKey.getBytes(), eventTimestampValue.toByteArray());
-    featureReferenceValueMap.forEach(
-        (featureReference, featureValue) -> {
-          // Murmur hash Redis Feature Field i.e murmur(<rides:trip_distance>)
-          String delimitedFeatureReference =
-              featureReference.getFeatureTable() + ":" + featureReference.getName();
-          byte[] featureReferenceBytes =
-              Hashing.murmur3_32()
-                  .hashString(delimitedFeatureReference, StandardCharsets.UTF_8)
-                  .asBytes();
-          // Insert features into Redis
-          syncCommands.hset(
-              redisKey.toByteArray(), featureReferenceBytes, featureValue.toByteArray());
-        });
-
-    // set up options for call credentials
-    options.put("oauth_url", TOKEN_URL);
-    options.put(CLIENT_ID, CLIENT_ID);
-    options.put(CLIENT_SECRET, CLIENT_SECRET);
-    options.put("jwkEndpointURI", JWK_URI);
-    options.put("audience", AUDIENCE);
-    options.put("grant_type", GRANT_TYPE);
+    log.info("Keys: {}", keys);
   }
 
   @AfterAll
@@ -182,11 +123,9 @@ public class ServingServiceFeast10IT extends BaseAuthIT {
     ServingAPIProto.FeatureReferenceV2 feature1Reference =
         DataGenerator.createFeatureReference("driver_hourly_stats", "conv_rate");
     ServingAPIProto.FeatureReferenceV2 feature2Reference =
-        DataGenerator.createFeatureReference("driver_hourly_stats", "acc_rate");
-    ServingAPIProto.FeatureReferenceV2 feature3Reference =
         DataGenerator.createFeatureReference("driver_hourly_stats", "avg_daily_trips");
     ImmutableList<ServingAPIProto.FeatureReferenceV2> featureReferences =
-        ImmutableList.of(feature1Reference, feature2Reference, feature3Reference);
+        ImmutableList.of(feature1Reference, feature2Reference);
 
     // Build GetOnlineFeaturesRequestV2
     GetOnlineFeaturesRequestV2 onlineFeatureRequest =
@@ -194,28 +133,24 @@ public class ServingServiceFeast10IT extends BaseAuthIT {
     GetOnlineFeaturesResponse featureResponse =
         servingStub.getOnlineFeaturesV2(onlineFeatureRequest);
 
-    ImmutableMap<String, ValueProto.Value> expectedValueMap =
-        ImmutableMap.of(
-            entityName,
-            entityValue,
-            FeatureV2.getFeatureStringRef(feature1Reference),
-            DataGenerator.createInt64Value(42));
+    assertEquals(1, featureResponse.getFieldValuesCount());
 
-    ImmutableMap<String, GetOnlineFeaturesResponse.FieldStatus> expectedStatusMap =
-        ImmutableMap.of(
-            entityName,
-            GetOnlineFeaturesResponse.FieldStatus.PRESENT,
-            FeatureV2.getFeatureStringRef(feature1Reference),
-            GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+    final GetOnlineFeaturesResponse.FieldValues fieldValue = featureResponse.getFieldValues(0);
+    for (final String key :
+        ImmutableList.of(
+            "driver_hourly_stats:avg_daily_trips", "driver_hourly_stats:conv_rate", "driver_id")) {
+      assertTrue(fieldValue.containsFields(key));
+      assertTrue(fieldValue.containsStatuses(key));
+      assertEquals(
+          GetOnlineFeaturesResponse.FieldStatus.PRESENT, fieldValue.getStatusesOrThrow(key));
+    }
 
-    GetOnlineFeaturesResponse.FieldValues expectedFieldValues =
-        GetOnlineFeaturesResponse.FieldValues.newBuilder()
-            .putAllFields(expectedValueMap)
-            .putAllStatuses(expectedStatusMap)
-            .build();
-    ImmutableList<GetOnlineFeaturesResponse.FieldValues> expectedFieldValuesList =
-        ImmutableList.of(expectedFieldValues);
-
-    assertEquals(expectedFieldValuesList, featureResponse.getFieldValuesList());
+    assertEquals(
+        721, fieldValue.getFieldsOrThrow("driver_hourly_stats:avg_daily_trips").getInt64Val());
+    assertEquals(1001, fieldValue.getFieldsOrThrow("driver_id").getInt64Val());
+    assertEquals(
+        0.74203354,
+        fieldValue.getFieldsOrThrow("driver_hourly_stats:conv_rate").getDoubleVal(),
+        0.0001);
   }
 }

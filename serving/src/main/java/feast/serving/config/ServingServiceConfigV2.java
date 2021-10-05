@@ -159,6 +159,7 @@ public class ServingServiceConfigV2 {
 
     final FeatureSpecRetriever featureSpecRetriever;
     log.info("Created RegistryFeatureSpecRetriever");
+    log.info("Working Directory = " + System.getProperty("user.dir"));
     final LocalRegistryRepo repo = new LocalRegistryRepo(Paths.get(feastProperties.getRegistry()));
     featureSpecRetriever = new RegistryFeatureSpecRetriever(repo);
 
