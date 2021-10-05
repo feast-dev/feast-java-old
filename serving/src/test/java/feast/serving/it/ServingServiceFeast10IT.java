@@ -106,7 +106,7 @@ public class ServingServiceFeast10IT extends BaseAuthIT {
   }
 
   @Test
-  public void shouldRegisterAndGetOnlineFeatures() {
+  public void shouldGetOnlineFeatures() {
     // getOnlineFeatures Information
     String projectName = "feast_project";
     String entityName = "driver_id";
