@@ -27,8 +27,6 @@ import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
 import feast.proto.serving.ServingServiceGrpc;
 import io.grpc.ManagedChannel;
-import io.lettuce.core.RedisClient;
-import io.lettuce.core.RedisURI;
 import java.io.File;
 import java.util.concurrent.TimeUnit;
 import org.junit.ClassRule;
@@ -43,16 +41,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.DockerComposeContainer;
-import org.testcontainers.containers.wait.strategy.WaitAllStrategy;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @ActiveProfiles("it")
-@SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {
-      "feast.registry:src/test/resources/docker-compose/feast10/registry.db",
-    })
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 public class ServingServiceFeast10IT extends BaseAuthIT {
 
@@ -73,20 +66,12 @@ public class ServingServiceFeast10IT extends BaseAuthIT {
   @DynamicPropertySource
   static void initialize(DynamicPropertyRegistry registry) {
     registry.add("grpc.server.port", () -> FEAST_SERVING_PORT);
+    registry.add("feast.registry", () -> "src/test/resources/docker-compose/feast10/registry.db");
   }
 
   @BeforeAll
   static void globalSetup() {
-
-    environment.waitingFor("materialize", new WaitAllStrategy());
-
     servingStub = TestUtils.getServingServiceStub(false, FEAST_SERVING_PORT, null);
-    RedisClient redisClient =
-        RedisClient.create(
-            new RedisURI(
-                environment.getServiceHost("redis_1", REDIS_PORT),
-                environment.getServicePort("redis_1", REDIS_PORT),
-                java.time.Duration.ofMillis(2000)));
   }
 
   @AfterAll
