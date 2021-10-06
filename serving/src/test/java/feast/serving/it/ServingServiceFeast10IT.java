@@ -46,7 +46,10 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @ActiveProfiles("it")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+properties = {
+     "feast.registry:src/test/resources/docker-compose/feast10/registry.db",
+})
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Testcontainers
 public class ServingServiceFeast10IT extends BaseAuthIT {
@@ -68,7 +71,6 @@ public class ServingServiceFeast10IT extends BaseAuthIT {
   @DynamicPropertySource
   static void initialize(DynamicPropertyRegistry registry) {
     registry.add("grpc.server.port", () -> FEAST_SERVING_PORT);
-    registry.add("feast.registry", () -> "src/test/resources/docker-compose/feast10/registry.db");
   }
 
   @BeforeAll
