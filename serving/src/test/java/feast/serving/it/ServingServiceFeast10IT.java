@@ -51,7 +51,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
     properties = {
       "feast.registry:src/test/resources/docker-compose/feast10/registry.db",
     })
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Testcontainers
 public class ServingServiceFeast10IT extends BaseAuthIT {
 
@@ -85,6 +85,7 @@ public class ServingServiceFeast10IT extends BaseAuthIT {
   }
 
   @Test
+  @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
   public void shouldGetOnlineFeatures() {
     // getOnlineFeatures Information
     String projectName = "feast_project";
