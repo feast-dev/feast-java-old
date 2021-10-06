@@ -23,16 +23,15 @@ import feast.proto.serving.ServingAPIProto;
 import feast.serving.exception.SpecRetrievalException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class LocalRegistryRepo implements RegistryRepository {
   private final Path localRegistryPath;
 
   public LocalRegistryRepo(Path localRegistryPath) {
     this.localRegistryPath = localRegistryPath;
-    if(!this.localRegistryPath.toFile().exists()) {
-      throw new RuntimeException(String.format("Local regstry path %s not found", this.localRegistryPath));
+    if (!this.localRegistryPath.toFile().exists()) {
+      throw new RuntimeException(
+          String.format("Local regstry path %s not found", this.localRegistryPath));
     }
   }
 

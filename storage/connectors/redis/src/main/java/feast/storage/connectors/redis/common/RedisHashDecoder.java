@@ -26,7 +26,6 @@ import feast.storage.api.retriever.ProtoFeature;
 import io.lettuce.core.KeyValue;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import org.slf4j.Logger;
 
 public class RedisHashDecoder {
 
