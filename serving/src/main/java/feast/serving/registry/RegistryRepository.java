@@ -22,8 +22,8 @@ import feast.proto.core.RegistryProto;
 import feast.proto.serving.ServingAPIProto;
 
 /**
- * RegistryRepository allows the ServingService to retrieve feature definitions from a Registry object.
- * This approach is needed for a feature store created using feast 0.10+.
+ * RegistryRepository allows the ServingService to retrieve feature definitions from a Registry
+ * object. This approach is needed for a feature store created using feast 0.10+.
  */
 public interface RegistryRepository {
   RegistryProto.Registry getRegistry();

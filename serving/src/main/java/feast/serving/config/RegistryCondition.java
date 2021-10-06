@@ -22,9 +22,9 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 
 /**
- * A {@link Condition} to signal that the ServingService should get
- * feature definitions and metadata from the Registry object. This is needed for versions of the feature store
- * written by feast 0.10+.
+ * A {@link Condition} to signal that the ServingService should get feature definitions and metadata
+ * from the Registry object. This is needed for versions of the feature store written by feast
+ * 0.10+.
  */
 public class RegistryCondition implements Condition {
 
