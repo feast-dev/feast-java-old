@@ -26,17 +26,11 @@ import feast.proto.serving.ServingAPIProto;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
 import feast.proto.serving.ServingServiceGrpc;
-import feast.proto.types.ValueProto;
 import io.grpc.ManagedChannel;
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisURI;
-import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.sync.RedisCommands;
-import io.lettuce.core.codec.ByteArrayCodec;
 import java.io.File;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.ClassRule;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
