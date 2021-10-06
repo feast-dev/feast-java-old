@@ -90,7 +90,7 @@ public class ServingServiceFeast10IT extends BaseAuthIT {
   }
 
   @AfterAll
-  static void tearDown() {
+  static void tearDown() throws Exception {
     ((ManagedChannel) servingStub.getChannel()).shutdown().awaitTermination(10, TimeUnit.SECONDS);
   }
 
