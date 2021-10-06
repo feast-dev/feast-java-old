@@ -139,6 +139,7 @@ public class ServingServiceConfigV2 {
     final FeastProperties.Store store = feastProperties.getActiveStore();
 
     OnlineRetrieverV2 retrieverV2;
+    //TODO: Support more store types, and potentially use a plugin model here.
     switch (store.getType()) {
       case REDIS_CLUSTER:
         RedisClientAdapter redisClusterClient =

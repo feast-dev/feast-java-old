@@ -25,27 +25,24 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class LocalRegistryRepo implements RegistryRepository {
-  private final Path localRegistryPath;
+  private final RegistryProto.Registry registry;
 
   public LocalRegistryRepo(Path localRegistryPath) {
-    this.localRegistryPath = localRegistryPath;
-    if (!this.localRegistryPath.toFile().exists()) {
+    if (!localRegistryPath.toFile().exists()) {
       throw new RuntimeException(
-          String.format("Local regstry path %s not found", this.localRegistryPath));
+          String.format("Local registry not found at path %s", localRegistryPath));
+    }
+    try {
+      final byte[] registryContents = Files.readAllBytes(localRegistryPath);
+      this.registry = RegistryProto.Registry.parseFrom(registryContents);
+    } catch (final Exception e) {
+      throw new RuntimeException(e);
     }
   }
 
   @Override
   public RegistryProto.Registry getRegistry() {
-    try {
-
-      final byte[] registryContents = Files.readAllBytes(this.localRegistryPath);
-
-      return RegistryProto.Registry.parseFrom(registryContents);
-
-    } catch (final Exception e) {
-      throw new RuntimeException(e);
-    }
+    return this.registry;
   }
 
   @Override
