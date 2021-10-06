@@ -30,8 +30,6 @@ import org.slf4j.Logger;
 
 public class RedisHashDecoder {
 
-  private static final Logger log = org.slf4j.LoggerFactory.getLogger(RedisHashDecoder.class);
-
   /**
    * Converts all retrieved Redis Hash values based on EntityRows into {@link Feature}
    *

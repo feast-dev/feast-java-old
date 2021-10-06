@@ -28,6 +28,9 @@ import java.util.Comparator;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
 
+// This is derived from
+// https://github.com/feast-dev/feast/blob/b1ccf8dd1535f721aee8bea937ee38feff80bec5/sdk/python/feast/infra/key_encoding_utils.py#L22
+// and must be kept up to date with any changes in that logic.
 public class EntityKeySerializerV2 implements EntityKeySerializer {
 
   @Override
