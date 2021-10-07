@@ -20,9 +20,14 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.google.cloud.bigtable.data.v2.BigtableDataClient;
 import com.google.cloud.bigtable.data.v2.BigtableDataSettings;
+import com.google.protobuf.AbstractMessageLite;
+import feast.serving.registry.LocalRegistryRepo;
 import feast.serving.service.OnlineServingServiceV2;
 import feast.serving.service.ServingServiceV2;
 import feast.serving.specs.CachedSpecService;
+import feast.serving.specs.CoreFeatureSpecRetriever;
+import feast.serving.specs.FeatureSpecRetriever;
+import feast.serving.specs.RegistryFeatureSpecRetriever;
 import feast.storage.api.retriever.OnlineRetrieverV2;
 import feast.storage.connectors.bigtable.retriever.BigTableOnlineRetriever;
 import feast.storage.connectors.bigtable.retriever.BigTableStoreConfig;
@@ -32,6 +37,7 @@ import feast.storage.connectors.redis.retriever.*;
 import io.opentracing.Tracer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -39,6 +45,7 @@ import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 
@@ -64,27 +71,26 @@ public class ServingServiceConfigV2 {
   }
 
   @Bean
+  @Conditional(CoreCondition.class)
   public ServingServiceV2 servingServiceV2(
       FeastProperties feastProperties, CachedSpecService specService, Tracer tracer) {
-    ServingServiceV2 servingService = null;
-    FeastProperties.Store store = feastProperties.getActiveStore();
+    final ServingServiceV2 servingService;
+    final FeastProperties.Store store = feastProperties.getActiveStore();
 
+    OnlineRetrieverV2 retrieverV2;
     switch (store.getType()) {
       case REDIS_CLUSTER:
         RedisClientAdapter redisClusterClient =
             RedisClusterClient.create(store.getRedisClusterConfig());
-        OnlineRetrieverV2 redisClusterRetriever = new OnlineRetriever(redisClusterClient);
-        servingService = new OnlineServingServiceV2(redisClusterRetriever, specService, tracer);
+        retrieverV2 = new OnlineRetriever(redisClusterClient, (AbstractMessageLite::toByteArray));
         break;
       case REDIS:
         RedisClientAdapter redisClient = RedisClient.create(store.getRedisConfig());
-        OnlineRetrieverV2 redisRetriever = new OnlineRetriever(redisClient);
-        servingService = new OnlineServingServiceV2(redisRetriever, specService, tracer);
+        retrieverV2 = new OnlineRetriever(redisClient, (AbstractMessageLite::toByteArray));
         break;
       case BIGTABLE:
         BigtableDataClient bigtableClient = context.getBean(BigtableDataClient.class);
-        OnlineRetrieverV2 bigtableRetriever = new BigTableOnlineRetriever(bigtableClient);
-        servingService = new OnlineServingServiceV2(bigtableRetriever, specService, tracer);
+        retrieverV2 = new BigTableOnlineRetriever(bigtableClient);
         break;
       case CASSANDRA:
         CassandraStoreConfig config = feastProperties.getActiveStore().getCassandraConfig();
@@ -109,10 +115,56 @@ public class ServingServiceConfigV2 {
                 .withLocalDatacenter(dataCenter)
                 .withKeyspace(keySpace)
                 .build();
-        OnlineRetrieverV2 cassandraRetriever = new CassandraOnlineRetriever(session);
-        servingService = new OnlineServingServiceV2(cassandraRetriever, specService, tracer);
+        retrieverV2 = new CassandraOnlineRetriever(session);
         break;
+      default:
+        throw new RuntimeException(
+            String.format("Unable to identify online store type: %s", store.getType()));
     }
+
+    final FeatureSpecRetriever featureSpecRetriever;
+    log.info("Created CoreFeatureSpecRetriever");
+    featureSpecRetriever = new CoreFeatureSpecRetriever(specService);
+
+    servingService = new OnlineServingServiceV2(retrieverV2, tracer, featureSpecRetriever);
+
+    return servingService;
+  }
+
+  @Bean
+  @Conditional(RegistryCondition.class)
+  public ServingServiceV2 registryBasedServingServiceV2(
+      FeastProperties feastProperties, Tracer tracer) {
+    final ServingServiceV2 servingService;
+    final FeastProperties.Store store = feastProperties.getActiveStore();
+
+    OnlineRetrieverV2 retrieverV2;
+    // TODO: Support more store types, and potentially use a plugin model here.
+    switch (store.getType()) {
+      case REDIS_CLUSTER:
+        RedisClientAdapter redisClusterClient =
+            RedisClusterClient.create(store.getRedisClusterConfig());
+        retrieverV2 = new OnlineRetriever(redisClusterClient, new EntityKeySerializerV2());
+        break;
+      case REDIS:
+        RedisClientAdapter redisClient = RedisClient.create(store.getRedisConfig());
+        log.info("Created EntityKeySerializerV2");
+        retrieverV2 = new OnlineRetriever(redisClient, new EntityKeySerializerV2());
+        break;
+      default:
+        throw new RuntimeException(
+            String.format(
+                "Unable to identify online store type: %s for Regsitry Backed Serving Service",
+                store.getType()));
+    }
+
+    final FeatureSpecRetriever featureSpecRetriever;
+    log.info("Created RegistryFeatureSpecRetriever");
+    log.info("Working Directory = " + System.getProperty("user.dir"));
+    final LocalRegistryRepo repo = new LocalRegistryRepo(Paths.get(feastProperties.getRegistry()));
+    featureSpecRetriever = new RegistryFeatureSpecRetriever(repo);
+
+    servingService = new OnlineServingServiceV2(retrieverV2, tracer, featureSpecRetriever);
 
     return servingService;
   }

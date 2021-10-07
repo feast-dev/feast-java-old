@@ -18,11 +18,13 @@ package feast.serving.config;
 
 import java.util.concurrent.ScheduledExecutorService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnBean(CoreCondition.class)
 public class ContextClosedHandler implements ApplicationListener<ContextClosedEvent> {
 
   @Autowired ScheduledExecutorService executor;

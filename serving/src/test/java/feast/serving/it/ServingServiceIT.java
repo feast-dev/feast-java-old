@@ -212,7 +212,7 @@ public class ServingServiceIT extends BaseAuthIT {
             .build();
     Response response = new OkHttpClient().newCall(request).execute();
     assertTrue(response.isSuccessful());
-    assertTrue(!response.body().string().isEmpty());
+    assertFalse(response.body().string().isEmpty());
   }
 
   @Test

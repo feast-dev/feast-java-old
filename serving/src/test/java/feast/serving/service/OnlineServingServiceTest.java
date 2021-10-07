@@ -34,6 +34,7 @@ import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse.FieldStatus
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse.FieldValues;
 import feast.proto.types.ValueProto;
 import feast.serving.specs.CachedSpecService;
+import feast.serving.specs.CoreFeatureSpecRetriever;
 import feast.storage.api.retriever.Feature;
 import feast.storage.api.retriever.ProtoFeature;
 import feast.storage.connectors.redis.retriever.OnlineRetriever;
@@ -61,7 +62,8 @@ public class OnlineServingServiceTest {
   @Before
   public void setUp() {
     initMocks(this);
-    onlineServingServiceV2 = new OnlineServingServiceV2(retrieverV2, specService, tracer);
+    onlineServingServiceV2 =
+        new OnlineServingServiceV2(retrieverV2, tracer, new CoreFeatureSpecRetriever(specService));
 
     mockedFeatureRows = new ArrayList<>();
     mockedFeatureRows.add(

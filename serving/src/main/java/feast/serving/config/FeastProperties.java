@@ -72,6 +72,16 @@ public class FeastProperties {
   /* Feast Core port to connect to. */
   @Positive private int coreGrpcPort;
 
+  private String registry;
+
+  public String getRegistry() {
+    return registry;
+  }
+
+  public void setRegistry(final String registry) {
+    this.registry = registry;
+  }
+
   private CoreAuthenticationProperties coreAuthentication;
 
   public CoreAuthenticationProperties getCoreAuthentication() {
@@ -82,7 +92,6 @@ public class FeastProperties {
     this.coreAuthentication = coreAuthentication;
   }
 
-  /* Feast Core port to connect to. */
   @Positive private int coreCacheRefreshInterval;
 
   private SecurityProperties security;

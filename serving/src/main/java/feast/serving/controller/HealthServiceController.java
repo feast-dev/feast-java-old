@@ -19,7 +19,6 @@ package feast.serving.controller;
 import feast.proto.serving.ServingAPIProto.GetFeastServingInfoRequest;
 import feast.serving.interceptors.GrpcMonitoringInterceptor;
 import feast.serving.service.ServingServiceV2;
-import feast.serving.specs.CachedSpecService;
 import io.grpc.health.v1.HealthGrpc.HealthImplBase;
 import io.grpc.health.v1.HealthProto.HealthCheckRequest;
 import io.grpc.health.v1.HealthProto.HealthCheckResponse;
@@ -32,12 +31,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 @GrpcService(interceptors = {GrpcMonitoringInterceptor.class})
 public class HealthServiceController extends HealthImplBase {
-  private CachedSpecService specService;
-  private ServingServiceV2 servingService;
+  private final ServingServiceV2 servingService;
 
   @Autowired
-  public HealthServiceController(CachedSpecService specService, ServingServiceV2 servingService) {
-    this.specService = specService;
+  public HealthServiceController(final ServingServiceV2 servingService) {
     this.servingService = servingService;
   }
 
@@ -47,7 +44,7 @@ public class HealthServiceController extends HealthImplBase {
     // TODO: Implement proper logic to determine if ServingServiceV2 is healthy e.g.
     // if it's online service check that it the service can retrieve dummy/random
     // feature table.
-    // Implement similary for batch service.
+    // Implement similarly for batch service.
 
     try {
       servingService.getFeastServingInfo(GetFeastServingInfoRequest.getDefaultInstance());

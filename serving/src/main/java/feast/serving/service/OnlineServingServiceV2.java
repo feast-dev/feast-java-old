@@ -28,7 +28,7 @@ import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
 import feast.proto.types.ValueProto;
 import feast.serving.exception.SpecRetrievalException;
-import feast.serving.specs.CachedSpecService;
+import feast.serving.specs.FeatureSpecRetriever;
 import feast.serving.util.Metrics;
 import feast.storage.api.retriever.Feature;
 import feast.storage.api.retriever.OnlineRetrieverV2;
@@ -45,15 +45,15 @@ import org.slf4j.Logger;
 public class OnlineServingServiceV2 implements ServingServiceV2 {
 
   private static final Logger log = org.slf4j.LoggerFactory.getLogger(OnlineServingServiceV2.class);
-  private final CachedSpecService specService;
   private final Tracer tracer;
   private final OnlineRetrieverV2 retriever;
+  private final FeatureSpecRetriever featureSpecRetriever;
 
   public OnlineServingServiceV2(
-      OnlineRetrieverV2 retriever, CachedSpecService specService, Tracer tracer) {
+      OnlineRetrieverV2 retriever, Tracer tracer, FeatureSpecRetriever featureSpecRetriever) {
     this.retriever = retriever;
-    this.specService = specService;
     this.tracer = tracer;
+    this.featureSpecRetriever = featureSpecRetriever;
   }
 
   /** {@inheritDoc} */
@@ -94,10 +94,10 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
             .collect(
                 Collectors.toMap(
                     Function.identity(),
-                    ref -> specService.getFeatureTableSpec(finalProjectName, ref).getMaxAge()));
+                    ref -> this.featureSpecRetriever.getMaxAge(finalProjectName, ref)));
     List<String> entityNames =
         featureReferences.stream()
-            .map(ref -> specService.getFeatureTableSpec(finalProjectName, ref).getEntitiesList())
+            .map(ref -> this.featureSpecRetriever.getEntitiesList(finalProjectName, ref))
             .findFirst()
             .get();
 
@@ -109,7 +109,9 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
                     Function.identity(),
                     ref -> {
                       try {
-                        return specService.getFeatureSpec(finalProjectName, ref).getValueType();
+                        return this.featureSpecRetriever
+                            .getFeatureSpec(finalProjectName, ref)
+                            .getValueType();
                       } catch (SpecRetrievalException e) {
                         return ValueProto.ValueType.Enum.INVALID;
                       }
