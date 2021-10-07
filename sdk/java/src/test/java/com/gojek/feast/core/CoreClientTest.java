@@ -21,6 +21,7 @@ import static org.mockito.Mockito.mock;
 
 import com.gojek.feast.GrpcMock;
 import feast.proto.core.CoreServiceGrpc;
+import feast.proto.core.DataSourceProto;
 import java.util.*;
 import org.junit.Before;
 import org.junit.Test;
@@ -81,6 +82,10 @@ public class CoreClientTest {
         FeatureTable.Spec.getBuilder(CoreServiceImplMock.PROJECT, name)
             .addEntity("entity")
             .addLabel("key", "value")
+            .setBatchSource(
+                DataSourceProto.DataSource.newBuilder()
+                    .setType(DataSourceProto.DataSource.SourceType.BATCH_FILE)
+                    .build())
             .build();
     client.apply(spec);
     Assertions.assertEquals(

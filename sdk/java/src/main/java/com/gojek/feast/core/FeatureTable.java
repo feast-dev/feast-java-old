@@ -16,6 +16,7 @@
  */
 package com.gojek.feast.core;
 
+import feast.proto.core.DataSourceProto;
 import feast.proto.core.FeatureTableProto;
 import java.time.Duration;
 import java.util.*;
@@ -31,6 +32,8 @@ public class FeatureTable {
     private final List<String> entities;
     private final List<Feature> features;
     private final Map<String, String> labels;
+    private DataSourceProto.DataSource batchSource;
+    private DataSourceProto.DataSource streamSource;
     private Duration maxAge;
 
     protected Spec(
@@ -39,22 +42,17 @@ public class FeatureTable {
         List<String> entities,
         List<Feature> features,
         Map<String, String> labels,
+        DataSourceProto.DataSource batchSource,
+        DataSourceProto.DataSource streamSource,
         Duration maxAge) {
       this.project = project;
       this.name = name;
       this.entities = entities;
       this.features = features;
       this.labels = labels;
+      this.batchSource = batchSource;
+      this.streamSource = streamSource;
       this.maxAge = maxAge;
-    }
-
-    protected Spec(
-        String project,
-        String name,
-        List<String> entities,
-        List<Feature> features,
-        Map<String, String> labels) {
-      this(project, name, entities, features, labels, null);
     }
 
     public static Builder getBuilder(String project, String name) {
@@ -67,6 +65,8 @@ public class FeatureTable {
       private final List<String> entities = new LinkedList<>();
       private final List<Feature> features = new LinkedList<>();
       private final Map<String, String> labels = new HashMap<>();
+      private DataSourceProto.DataSource batchSource;
+      private DataSourceProto.DataSource streamSource;
       private Duration maxAge;
 
       private Builder(String project, String name) {
@@ -75,7 +75,8 @@ public class FeatureTable {
       }
 
       public Spec build() {
-        return new Spec(project, name, entities, features, labels, maxAge);
+        return new Spec(
+            project, name, entities, features, labels, batchSource, streamSource, maxAge);
       }
 
       public Builder addEntity(String entity) {
@@ -108,6 +109,16 @@ public class FeatureTable {
         return this;
       }
 
+      public Builder setBatchSource(DataSourceProto.DataSource batchSource) {
+        this.batchSource = batchSource;
+        return this;
+      }
+
+      public Builder setStreamSource(DataSourceProto.DataSource streamSource) {
+        this.streamSource = streamSource;
+        return this;
+      }
+
       public Builder setMaxAge(Duration maxAge) {
         this.maxAge = maxAge;
         return this;
@@ -134,6 +145,14 @@ public class FeatureTable {
       return labels;
     }
 
+    public DataSourceProto.DataSource getBatchSource() {
+      return batchSource;
+    }
+
+    public DataSourceProto.DataSource getStreamSource() {
+      return streamSource;
+    }
+
     public Optional<Duration> getMaxAge() {
       return Optional.ofNullable(maxAge);
     }
@@ -145,6 +164,8 @@ public class FeatureTable {
       this.features =
           spec.getFeaturesList().stream().map(Feature::new).collect(Collectors.toList());
       this.labels = spec.getLabelsMap();
+      if (spec.hasBatchSource()) this.batchSource = spec.getBatchSource();
+      if (spec.hasStreamSource()) this.streamSource = spec.getStreamSource();
       if (spec.hasMaxAge())
         this.maxAge =
             Duration.ofSeconds(spec.getMaxAge().getSeconds(), spec.getMaxAge().getNanos());
@@ -157,6 +178,12 @@ public class FeatureTable {
               .addAllEntities(entities)
               .addAllFeatures(features.stream().map(Feature::toProto).collect(Collectors.toList()))
               .putAllLabels(labels);
+      if (batchSource != null) {
+        builder.setBatchSource(batchSource);
+      }
+      if (streamSource != null) {
+        builder.setStreamSource(streamSource);
+      }
       if (maxAge != null) {
         builder.setMaxAge(
             com.google.protobuf.Duration.newBuilder()
