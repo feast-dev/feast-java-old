@@ -18,6 +18,7 @@ package feast.serving.registry;
 
 import feast.proto.core.FeatureProto;
 import feast.proto.core.FeatureViewProto;
+import feast.proto.core.OnDemandFeatureViewProto;
 import feast.proto.core.RegistryProto;
 import feast.proto.serving.ServingAPIProto;
 import feast.serving.exception.SpecRetrievalException;
@@ -74,5 +75,44 @@ public class LocalRegistryRepo implements RegistryRepository {
         String.format(
             "Unable to find feature with name: %s in feature view: %s",
             featureReference.getName(), featureReference.getFeatureTable()));
+  }
+
+  @Override
+  public OnDemandFeatureViewProto.OnDemandFeatureViewSpec getOnDemandFeatureViewSpec(
+      String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
+    final RegistryProto.Registry registry = this.getRegistry();
+    for (final OnDemandFeatureViewProto.OnDemandFeatureView onDemandFeatureView :
+        registry.getOnDemandFeatureViewsList()) {
+      if (onDemandFeatureView.getSpec().getName().equals(featureReference.getFeatureTable())) {
+        return onDemandFeatureView.getSpec();
+      }
+    }
+    throw new SpecRetrievalException(
+        String.format(
+            "Unable to find on demand feature view with name: %s",
+            featureReference.getFeatureTable()));
+  }
+
+  @Override
+  public boolean isBatchFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
+    final RegistryProto.Registry registry = this.getRegistry();
+    for (final FeatureViewProto.FeatureView featureView : registry.getFeatureViewsList()) {
+      if (featureView.getSpec().getName().equals(featureReference.getFeatureTable())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @Override
+  public boolean isOnDemandFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
+    final RegistryProto.Registry registry = this.getRegistry();
+    for (final OnDemandFeatureViewProto.OnDemandFeatureView onDemandFeatureView :
+        registry.getOnDemandFeatureViewsList()) {
+      if (onDemandFeatureView.getSpec().getName().equals(featureReference.getFeatureTable())) {
+        return true;
+      }
+    }
+    return false;
   }
 }

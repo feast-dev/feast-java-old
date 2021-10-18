@@ -18,6 +18,8 @@ package feast.serving.specs;
 
 import com.google.protobuf.Duration;
 import feast.proto.core.FeatureProto;
+import feast.proto.core.FeatureViewProto;
+import feast.proto.core.OnDemandFeatureViewProto;
 import feast.proto.serving.ServingAPIProto;
 import java.util.List;
 
@@ -30,4 +32,14 @@ public interface FeatureSpecRetriever {
 
   FeatureProto.FeatureSpecV2 getFeatureSpec(
       String projectName, ServingAPIProto.FeatureReferenceV2 featureReference);
+
+  FeatureViewProto.FeatureViewSpec getBatchFeatureViewSpec(
+      String projectName, ServingAPIProto.FeatureReferenceV2 featureReference);
+
+  OnDemandFeatureViewProto.OnDemandFeatureViewSpec getOnDemandFeatureViewSpec(
+      String projectName, ServingAPIProto.FeatureReferenceV2 featureReference);
+
+  boolean isBatchFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference);
+
+  boolean isOnDemandFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference);
 }

@@ -18,7 +18,10 @@ package feast.serving.specs;
 
 import com.google.protobuf.Duration;
 import feast.proto.core.FeatureProto;
+import feast.proto.core.FeatureViewProto;
+import feast.proto.core.OnDemandFeatureViewProto;
 import feast.proto.serving.ServingAPIProto;
+import feast.serving.exception.SpecRetrievalException;
 import java.util.List;
 
 public class CoreFeatureSpecRetriever implements FeatureSpecRetriever {
@@ -44,5 +47,32 @@ public class CoreFeatureSpecRetriever implements FeatureSpecRetriever {
   public FeatureProto.FeatureSpecV2 getFeatureSpec(
       String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
     return this.specService.getFeatureSpec(projectName, featureReference);
+  }
+
+  @Override
+  public FeatureViewProto.FeatureViewSpec getBatchFeatureViewSpec(
+      String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
+    throw new SpecRetrievalException(
+        String.format(
+            "Unable to find feature view spec with name: %s", featureReference.getFeatureTable()));
+  }
+
+  @Override
+  public OnDemandFeatureViewProto.OnDemandFeatureViewSpec getOnDemandFeatureViewSpec(
+      String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
+    throw new SpecRetrievalException(
+        String.format(
+            "Unable to find on demand feature view spec with name: %s",
+            featureReference.getFeatureTable()));
+  }
+
+  @Override
+  public boolean isBatchFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
+    return true;
+  }
+
+  @Override
+  public boolean isOnDemandFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
+    return false;
   }
 }
