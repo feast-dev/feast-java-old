@@ -39,7 +39,5 @@ public interface FeatureSpecRetriever {
   OnDemandFeatureViewProto.OnDemandFeatureViewSpec getOnDemandFeatureViewSpec(
       String projectName, ServingAPIProto.FeatureReferenceV2 featureReference);
 
-  boolean isBatchFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference);
-
   boolean isOnDemandFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference);
 }

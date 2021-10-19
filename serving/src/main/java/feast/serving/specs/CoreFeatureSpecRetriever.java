@@ -67,11 +67,6 @@ public class CoreFeatureSpecRetriever implements FeatureSpecRetriever {
   }
 
   @Override
-  public boolean isBatchFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
-    return true;
-  }
-
-  @Override
   public boolean isOnDemandFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
     return false;
   }

@@ -80,11 +80,6 @@ public class RegistryFeatureSpecRetriever implements FeatureSpecRetriever {
   }
 
   @Override
-  public boolean isBatchFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
-    return this.registryRepository.isBatchFeatureReference(featureReference);
-  }
-
-  @Override
   public boolean isOnDemandFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
     return this.registryRepository.isOnDemandFeatureReference(featureReference);
   }

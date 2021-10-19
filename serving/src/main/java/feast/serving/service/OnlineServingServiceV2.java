@@ -106,11 +106,11 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
       projectName = "default";
     }
 
-    // Split all feature references into batch feature view and ODFV references.
+    // Split all feature references into non-ODFV (e.g. batch and stream) references and ODFV.
     List<FeatureReferenceV2> allFeatureReferences = request.getFeaturesList();
     List<FeatureReferenceV2> featureReferences =
         allFeatureReferences.stream()
-            .filter(r -> this.featureSpecRetriever.isBatchFeatureReference(r))
+            .filter(r -> !this.featureSpecRetriever.isOnDemandFeatureReference(r))
             .collect(Collectors.toList());
     List<FeatureReferenceV2> onDemandFeatureReferences =
         allFeatureReferences.stream()
@@ -321,7 +321,7 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
     // Finally, we handle ODFVs. For each ODFV ref, we send a TransformFeaturesRequest to the FTS.
     // The request should contain the entity data, the retrieved features, and the request data.
     // All of this data must be bundled together and serialized into the Arrow IPC format.
-    if (onDemandFeatureReferences.size() > 0) {
+    if (!onDemandFeatureReferences.isEmpty()) {
       // TODO: avoid hardcoding FTS address
       final ManagedChannel channel =
           ManagedChannelBuilder.forTarget("localhost:6569").usePlaintext().build();

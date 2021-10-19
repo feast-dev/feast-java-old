@@ -94,17 +94,6 @@ public class LocalRegistryRepo implements RegistryRepository {
   }
 
   @Override
-  public boolean isBatchFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
-    final RegistryProto.Registry registry = this.getRegistry();
-    for (final FeatureViewProto.FeatureView featureView : registry.getFeatureViewsList()) {
-      if (featureView.getSpec().getName().equals(featureReference.getFeatureTable())) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  @Override
   public boolean isOnDemandFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
     final RegistryProto.Registry registry = this.getRegistry();
     for (final OnDemandFeatureViewProto.OnDemandFeatureView onDemandFeatureView :
