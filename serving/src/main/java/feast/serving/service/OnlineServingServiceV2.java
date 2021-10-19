@@ -79,6 +79,8 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
   private final Tracer tracer;
   private final OnlineRetrieverV2 retriever;
   private final FeatureSpecRetriever featureSpecRetriever;
+  static final int INT64_BITWIDTH = 64;
+  static final int INT32_BITWIDTH = 32;
 
   public OnlineServingServiceV2(
       OnlineRetrieverV2 retriever, Tracer tracer, FeatureSpecRetriever featureSpecRetriever) {
@@ -126,24 +128,32 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
 
       for (OnDemandInput input : inputs.values()) {
         OnDemandInput.InputCase inputCase = input.getInputCase();
-        if (inputCase.equals(inputCase.REQUEST_DATA_SOURCE)) {
-          DataSource requestDataSource = input.getRequestDataSource();
-          RequestDataOptions requestDataOptions = requestDataSource.getRequestDataOptions();
-          Set<String> requestDataNames = requestDataOptions.getSchemaMap().keySet();
-          requestDataFeatureNames.addAll(requestDataNames);
-        } else if (inputCase.equals(inputCase.FEATURE_VIEW)) {
-          FeatureView featureView = input.getFeatureView();
-          FeatureViewSpec featureViewSpec = featureView.getSpec();
-          String featureViewName = featureViewSpec.getName();
-          for (FeatureSpecV2 featureSpec : featureViewSpec.getFeaturesList()) {
-            String featureName = featureSpec.getName();
-            FeatureReferenceV2 onDemandFeatureInput =
-                FeatureReferenceV2.newBuilder()
-                    .setFeatureTable(featureViewName)
-                    .setName(featureName)
-                    .build();
-            onDemandFeatureInputs.add(onDemandFeatureInput);
-          }
+        switch (inputCase) {
+          case REQUEST_DATA_SOURCE:
+            DataSource requestDataSource = input.getRequestDataSource();
+            RequestDataOptions requestDataOptions = requestDataSource.getRequestDataOptions();
+            Set<String> requestDataNames = requestDataOptions.getSchemaMap().keySet();
+            requestDataFeatureNames.addAll(requestDataNames);
+            break;
+          case FEATURE_VIEW:
+            FeatureView featureView = input.getFeatureView();
+            FeatureViewSpec featureViewSpec = featureView.getSpec();
+            String featureViewName = featureViewSpec.getName();
+            for (FeatureSpecV2 featureSpec : featureViewSpec.getFeaturesList()) {
+              String featureName = featureSpec.getName();
+              FeatureReferenceV2 onDemandFeatureInput =
+                  FeatureReferenceV2.newBuilder()
+                      .setFeatureTable(featureViewName)
+                      .setName(featureName)
+                      .build();
+              onDemandFeatureInputs.add(onDemandFeatureInput);
+            }
+            break;
+          default:
+            throw Status.INTERNAL
+                .withDescription(
+                    "OnDemandInput proto input field has an unexpected type: " + inputCase)
+                .asRuntimeException();
         }
       }
     }
@@ -181,7 +191,7 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
       }
 
       // Construct new entity row containing the extracted entity data, if necessary.
-      if (fieldsMap.size() > 0) {
+      if (!fieldsMap.isEmpty()) {
         GetOnlineFeaturesRequestV2.EntityRow newEntityRow =
             GetOnlineFeaturesRequestV2.EntityRow.newBuilder()
                 .setTimestamp(entityRow.getTimestamp())
@@ -191,11 +201,6 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
       }
     }
     // TODO: error checking on lengths of lists in entityRows and requestDataFeatures
-
-    for (Map.Entry<String, List<ValueProto.Value>> entry : requestDataFeatures.entrySet()) {
-      String key = entry.getKey();
-      List<ValueProto.Value> values = entry.getValue();
-    }
 
     // Extract values and statuses to be used later in constructing FieldValues for the response.
     // The online features retrieved will augment these two data structures.
@@ -397,7 +402,13 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
               ((Float4Vector) column).setSafe(i, value.getFloatVal());
               break;
             default:
-              column = null;
+              throw Status.INTERNAL
+                  .withDescription(
+                      "Column "
+                          + columnName
+                          + " has a type that is currently not handled: "
+                          + valCase)
+                  .asRuntimeException();
           }
         }
       }
@@ -420,7 +431,11 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
         writer.writeBatch();
         writer.end();
       } catch (IOException e) {
-        e.printStackTrace();
+        log.info(e.toString());
+        throw Status.INTERNAL
+            .withDescription(
+                "ArrowFileWriter could not write properly; failed with error: " + e.toString())
+            .asRuntimeException();
       }
       byte[] byteData = out.toByteArray();
       ByteString inputData = ByteString.copyFrom(byteData);
@@ -475,54 +490,78 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
             // TODO: support all Feast types
             if (columnType instanceof ArrowType.Int) {
               int bitWidth = ((ArrowType.Int) columnType).getBitWidth();
-              if (bitWidth == 64) {
-                // handle as int64
-                for (int i = 0; i < valueCount; i++) {
-                  long int64Value = ((BigIntVector) fieldVector).get(i);
-                  Map<String, ValueProto.Value> rowValues = values.get(i);
-                  Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
-                  ValueProto.Value value =
-                      ValueProto.Value.newBuilder().setInt64Val(int64Value).build();
-                  rowValues.put(fullFeatureName, value);
-                  rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
-                }
-              } else if (bitWidth == 32) {
-                // handle as int32
-                for (int i = 0; i < valueCount; i++) {
-                  int intValue = ((IntVector) fieldVector).get(i);
-                  Map<String, ValueProto.Value> rowValues = values.get(i);
-                  Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
-                  ValueProto.Value value =
-                      ValueProto.Value.newBuilder().setInt32Val(intValue).build();
-                  rowValues.put(fullFeatureName, value);
-                  rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
-                }
+              switch (bitWidth) {
+                case INT64_BITWIDTH:
+                  for (int i = 0; i < valueCount; i++) {
+                    long int64Value = ((BigIntVector) fieldVector).get(i);
+                    Map<String, ValueProto.Value> rowValues = values.get(i);
+                    Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses =
+                        statuses.get(i);
+                    ValueProto.Value value =
+                        ValueProto.Value.newBuilder().setInt64Val(int64Value).build();
+                    rowValues.put(fullFeatureName, value);
+                    rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+                  }
+                  break;
+                case INT32_BITWIDTH:
+                  for (int i = 0; i < valueCount; i++) {
+                    int intValue = ((IntVector) fieldVector).get(i);
+                    Map<String, ValueProto.Value> rowValues = values.get(i);
+                    Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses =
+                        statuses.get(i);
+                    ValueProto.Value value =
+                        ValueProto.Value.newBuilder().setInt32Val(intValue).build();
+                    rowValues.put(fullFeatureName, value);
+                    rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+                  }
+                  break;
+                default:
+                  throw Status.INTERNAL
+                      .withDescription(
+                          "Column "
+                              + columnName
+                              + " is of type ArrowType.Int but has bitWidth "
+                              + bitWidth
+                              + " which cannot be handled.")
+                      .asRuntimeException();
               }
             } else if (columnType instanceof ArrowType.FloatingPoint) {
               FloatingPointPrecision precision =
                   ((ArrowType.FloatingPoint) columnType).getPrecision();
-              if (precision == FloatingPointPrecision.DOUBLE) {
-                // handle as double
-                for (int i = 0; i < valueCount; i++) {
-                  double doubleValue = ((Float8Vector) fieldVector).get(i);
-                  Map<String, ValueProto.Value> rowValues = values.get(i);
-                  Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
-                  ValueProto.Value value =
-                      ValueProto.Value.newBuilder().setDoubleVal(doubleValue).build();
-                  rowValues.put(fullFeatureName, value);
-                  rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
-                }
-              } else if (precision == FloatingPointPrecision.SINGLE) {
-                // handle as float
-                for (int i = 0; i < valueCount; i++) {
-                  float floatValue = ((Float4Vector) fieldVector).get(i);
-                  Map<String, ValueProto.Value> rowValues = values.get(i);
-                  Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
-                  ValueProto.Value value =
-                      ValueProto.Value.newBuilder().setFloatVal(floatValue).build();
-                  rowValues.put(fullFeatureName, value);
-                  rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
-                }
+              switch (precision) {
+                case DOUBLE:
+                  for (int i = 0; i < valueCount; i++) {
+                    double doubleValue = ((Float8Vector) fieldVector).get(i);
+                    Map<String, ValueProto.Value> rowValues = values.get(i);
+                    Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses =
+                        statuses.get(i);
+                    ValueProto.Value value =
+                        ValueProto.Value.newBuilder().setDoubleVal(doubleValue).build();
+                    rowValues.put(fullFeatureName, value);
+                    rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+                  }
+                  break;
+                case SINGLE:
+                  for (int i = 0; i < valueCount; i++) {
+                    float floatValue = ((Float4Vector) fieldVector).get(i);
+                    Map<String, ValueProto.Value> rowValues = values.get(i);
+                    Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses =
+                        statuses.get(i);
+                    ValueProto.Value value =
+                        ValueProto.Value.newBuilder().setFloatVal(floatValue).build();
+                    rowValues.put(fullFeatureName, value);
+                    rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+                  }
+                  break;
+                default:
+                  throw Status.INTERNAL
+                      .withDescription(
+                          "Column "
+                              + columnName
+                              + " is of type ArrowType.FloatingPoint but has precision "
+                              + precision
+                              + " which cannot be handled.")
+                      .asRuntimeException();
               }
             }
           }

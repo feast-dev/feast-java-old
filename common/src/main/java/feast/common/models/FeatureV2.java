@@ -36,8 +36,9 @@ public class FeatureV2 {
   }
 
   /**
-   * Accepts a feature reference as a string and returns the base feature name. For example, given
-   * "driver_hourly_stats:conv_rate", "conv_rate" would be returned.
+   * Accepts either a feature reference of the form "featuretable_name:feature_name" or just a
+   * feature name, and returns just the feature name. For example, given either
+   * "driver_hourly_stats:conv_rate" or "conv_rate", "conv_rate" would be returned.
    *
    * @param featureReference {String}
    * @return Base feature name of the feature reference
