@@ -70,6 +70,7 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.arrow.vector.util.ByteArrayReadableSeekableByteChannel;
+import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.tomcat.util.http.fileupload.ByteArrayOutputStream;
 import org.slf4j.Logger;
@@ -120,45 +121,11 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
 
     // Get the set of request data feature names from the ODFV references.
     // Also get the batch feature view references that the ODFVs require as inputs.
-    Pair<Set<String>, List<FeatureReferenceV2>> pair;
-    Set<String> requestDataFeatureNames = new HashSet<String>();
-    List<FeatureReferenceV2> onDemandFeatureInputs = new ArrayList<FeatureReferenceV2>();
-    for (FeatureReferenceV2 featureReference : onDemandFeatureReferences) {
-      OnDemandFeatureViewSpec onDemandFeatureViewSpec =
-          this.featureSpecRetriever.getOnDemandFeatureViewSpec(projectName, featureReference);
-      Map<String, OnDemandInput> inputs = onDemandFeatureViewSpec.getInputsMap();
-
-      for (OnDemandInput input : inputs.values()) {
-        OnDemandInput.InputCase inputCase = input.getInputCase();
-        switch (inputCase) {
-          case REQUEST_DATA_SOURCE:
-            DataSource requestDataSource = input.getRequestDataSource();
-            RequestDataOptions requestDataOptions = requestDataSource.getRequestDataOptions();
-            Set<String> requestDataNames = requestDataOptions.getSchemaMap().keySet();
-            requestDataFeatureNames.addAll(requestDataNames);
-            break;
-          case FEATURE_VIEW:
-            FeatureView featureView = input.getFeatureView();
-            FeatureViewSpec featureViewSpec = featureView.getSpec();
-            String featureViewName = featureViewSpec.getName();
-            for (FeatureSpecV2 featureSpec : featureViewSpec.getFeaturesList()) {
-              String featureName = featureSpec.getName();
-              FeatureReferenceV2 onDemandFeatureInput =
-                  FeatureReferenceV2.newBuilder()
-                      .setFeatureTable(featureViewName)
-                      .setName(featureName)
-                      .build();
-              onDemandFeatureInputs.add(onDemandFeatureInput);
-            }
-            break;
-          default:
-            throw Status.INTERNAL
-                .withDescription(
-                    "OnDemandInput proto input field has an unexpected type: " + inputCase)
-                .asRuntimeException();
-        }
-      }
-    }
+    Pair<Set<String>, List<FeatureReferenceV2>> pair =
+        extractRequestDataFeatureNamesAndOnDemandFeatureInputs(
+            onDemandFeatureReferences, projectName);
+    Set<String> requestDataFeatureNames = pair.getLeft();
+    List<FeatureReferenceV2> onDemandFeatureInputs = pair.getRight();
 
     // Add on demand feature inputs to list of feature references to retrieve.
     Set<FeatureReferenceV2> addedFeatureReferences = new HashSet<FeatureReferenceV2>();
@@ -512,6 +479,64 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
             Metrics.requestFeatureCount
                 .labels(project, FeatureV2.getFeatureStringRef(featureReference))
                 .inc());
+  }
+
+  /**
+   * Extract the set of request data feature names and the list of on demand feature inputs from a
+   * list of ODFV references.
+   *
+   * @param onDemandFeatureReferences list of ODFV references to be parsed
+   * @param projectName project name
+   * @return a pair containing the set of request data feature names and list of on demand feature
+   *     inputs
+   */
+  private Pair<Set<String>, List<FeatureReferenceV2>>
+      extractRequestDataFeatureNamesAndOnDemandFeatureInputs(
+          List<FeatureReferenceV2> onDemandFeatureReferences, String projectName) {
+    // Get the set of request data feature names from the ODFV references.
+    // Also get the batch feature view references that the ODFVs require as inputs.
+    Set<String> requestDataFeatureNames = new HashSet<String>();
+    List<FeatureReferenceV2> onDemandFeatureInputs = new ArrayList<FeatureReferenceV2>();
+    for (FeatureReferenceV2 featureReference : onDemandFeatureReferences) {
+      OnDemandFeatureViewSpec onDemandFeatureViewSpec =
+          this.featureSpecRetriever.getOnDemandFeatureViewSpec(projectName, featureReference);
+      Map<String, OnDemandInput> inputs = onDemandFeatureViewSpec.getInputsMap();
+
+      for (OnDemandInput input : inputs.values()) {
+        OnDemandInput.InputCase inputCase = input.getInputCase();
+        switch (inputCase) {
+          case REQUEST_DATA_SOURCE:
+            DataSource requestDataSource = input.getRequestDataSource();
+            RequestDataOptions requestDataOptions = requestDataSource.getRequestDataOptions();
+            Set<String> requestDataNames = requestDataOptions.getSchemaMap().keySet();
+            requestDataFeatureNames.addAll(requestDataNames);
+            break;
+          case FEATURE_VIEW:
+            FeatureView featureView = input.getFeatureView();
+            FeatureViewSpec featureViewSpec = featureView.getSpec();
+            String featureViewName = featureViewSpec.getName();
+            for (FeatureSpecV2 featureSpec : featureViewSpec.getFeaturesList()) {
+              String featureName = featureSpec.getName();
+              FeatureReferenceV2 onDemandFeatureInput =
+                  FeatureReferenceV2.newBuilder()
+                      .setFeatureTable(featureViewName)
+                      .setName(featureName)
+                      .build();
+              onDemandFeatureInputs.add(onDemandFeatureInput);
+            }
+            break;
+          default:
+            throw Status.INTERNAL
+                .withDescription(
+                    "OnDemandInput proto input field has an unexpected type: " + inputCase)
+                .asRuntimeException();
+        }
+      }
+    }
+    Pair<Set<String>, List<FeatureReferenceV2>> pair =
+        new ImmutablePair<Set<String>, List<FeatureReferenceV2>>(
+            requestDataFeatureNames, onDemandFeatureInputs);
+    return pair;
   }
 
   /**
