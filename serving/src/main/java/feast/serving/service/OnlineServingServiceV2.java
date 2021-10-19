@@ -119,8 +119,7 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
             .filter(r -> this.featureSpecRetriever.isOnDemandFeatureReference(r))
             .collect(Collectors.toList());
 
-    // Get the set of request data feature names from the ODFV references.
-    // Also get the batch feature view references that the ODFVs require as inputs.
+    // Get the set of request data feature names and feature inputs from the ODFV references.
     Pair<Set<String>, List<FeatureReferenceV2>> pair =
         extractRequestDataFeatureNamesAndOnDemandFeatureInputs(
             onDemandFeatureReferences, projectName);
@@ -137,38 +136,12 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
     }
 
     // Separate entity rows into entity data and request feature data.
+    Pair<List<GetOnlineFeaturesRequestV2.EntityRow>, Map<String, List<ValueProto.Value>>>
+        entityRowsAndRequestDataFeatures = separateEntityRows(requestDataFeatureNames, request);
     List<GetOnlineFeaturesRequestV2.EntityRow> entityRows =
-        new ArrayList<GetOnlineFeaturesRequestV2.EntityRow>();
+        entityRowsAndRequestDataFeatures.getLeft();
     Map<String, List<ValueProto.Value>> requestDataFeatures =
-        new HashMap<String, List<ValueProto.Value>>();
-
-    for (GetOnlineFeaturesRequestV2.EntityRow entityRow : request.getEntityRowsList()) {
-      Map<String, ValueProto.Value> fieldsMap = new HashMap<String, ValueProto.Value>();
-
-      for (Map.Entry<String, ValueProto.Value> entry : entityRow.getFieldsMap().entrySet()) {
-        String key = entry.getKey();
-        ValueProto.Value value = entry.getValue();
-
-        if (requestDataFeatureNames.contains(key)) {
-          if (!requestDataFeatures.containsKey(key)) {
-            requestDataFeatures.put(key, new ArrayList<ValueProto.Value>());
-          }
-          requestDataFeatures.get(key).add(value);
-        } else {
-          fieldsMap.put(key, value);
-        }
-      }
-
-      // Construct new entity row containing the extracted entity data, if necessary.
-      if (!fieldsMap.isEmpty()) {
-        GetOnlineFeaturesRequestV2.EntityRow newEntityRow =
-            GetOnlineFeaturesRequestV2.EntityRow.newBuilder()
-                .setTimestamp(entityRow.getTimestamp())
-                .putAllFields(fieldsMap)
-                .build();
-        entityRows.add(newEntityRow);
-      }
-    }
+        entityRowsAndRequestDataFeatures.getRight();
     // TODO: error checking on lengths of lists in entityRows and requestDataFeatures
 
     // Extract values and statuses to be used later in constructing FieldValues for the response.
@@ -493,8 +466,6 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
   private Pair<Set<String>, List<FeatureReferenceV2>>
       extractRequestDataFeatureNamesAndOnDemandFeatureInputs(
           List<FeatureReferenceV2> onDemandFeatureReferences, String projectName) {
-    // Get the set of request data feature names from the ODFV references.
-    // Also get the batch feature view references that the ODFVs require as inputs.
     Set<String> requestDataFeatureNames = new HashSet<String>();
     List<FeatureReferenceV2> onDemandFeatureInputs = new ArrayList<FeatureReferenceV2>();
     for (FeatureReferenceV2 featureReference : onDemandFeatureReferences) {
@@ -536,6 +507,57 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
     Pair<Set<String>, List<FeatureReferenceV2>> pair =
         new ImmutablePair<Set<String>, List<FeatureReferenceV2>>(
             requestDataFeatureNames, onDemandFeatureInputs);
+    return pair;
+  }
+
+  /**
+   * Separate the entity rows of a request into entity data and request feature data.
+   *
+   * @param requestDataFeatureNames set of feature names for the request data
+   * @param request the GetOnlineFeaturesRequestV2 containing the entity rows
+   * @return a pair containing the set of request data feature names and list of on demand feature
+   *     inputs
+   */
+  private Pair<List<GetOnlineFeaturesRequestV2.EntityRow>, Map<String, List<ValueProto.Value>>>
+      separateEntityRows(Set<String> requestDataFeatureNames, GetOnlineFeaturesRequestV2 request) {
+    // Separate entity rows into entity data and request feature data.
+    List<GetOnlineFeaturesRequestV2.EntityRow> entityRows =
+        new ArrayList<GetOnlineFeaturesRequestV2.EntityRow>();
+    Map<String, List<ValueProto.Value>> requestDataFeatures =
+        new HashMap<String, List<ValueProto.Value>>();
+
+    for (GetOnlineFeaturesRequestV2.EntityRow entityRow : request.getEntityRowsList()) {
+      Map<String, ValueProto.Value> fieldsMap = new HashMap<String, ValueProto.Value>();
+
+      for (Map.Entry<String, ValueProto.Value> entry : entityRow.getFieldsMap().entrySet()) {
+        String key = entry.getKey();
+        ValueProto.Value value = entry.getValue();
+
+        if (requestDataFeatureNames.contains(key)) {
+          if (!requestDataFeatures.containsKey(key)) {
+            requestDataFeatures.put(key, new ArrayList<ValueProto.Value>());
+          }
+          requestDataFeatures.get(key).add(value);
+        } else {
+          fieldsMap.put(key, value);
+        }
+      }
+
+      // Construct new entity row containing the extracted entity data, if necessary.
+      if (!fieldsMap.isEmpty()) {
+        GetOnlineFeaturesRequestV2.EntityRow newEntityRow =
+            GetOnlineFeaturesRequestV2.EntityRow.newBuilder()
+                .setTimestamp(entityRow.getTimestamp())
+                .putAllFields(fieldsMap)
+                .build();
+        entityRows.add(newEntityRow);
+      }
+    }
+
+    Pair<List<GetOnlineFeaturesRequestV2.EntityRow>, Map<String, List<ValueProto.Value>>> pair =
+        new ImmutablePair<
+            List<GetOnlineFeaturesRequestV2.EntityRow>, Map<String, List<ValueProto.Value>>>(
+            entityRows, requestDataFeatures);
     return pair;
   }
 
