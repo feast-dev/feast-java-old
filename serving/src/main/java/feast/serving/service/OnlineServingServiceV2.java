@@ -183,7 +183,10 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
       // Construct new entity row containing the extracted entity data, if necessary.
       if (fieldsMap.size() > 0) {
         GetOnlineFeaturesRequestV2.EntityRow newEntityRow =
-            GetOnlineFeaturesRequestV2.EntityRow.newBuilder().putAllFields(fieldsMap).build();
+            GetOnlineFeaturesRequestV2.EntityRow.newBuilder()
+                .setTimestamp(entityRow.getTimestamp())
+                .putAllFields(fieldsMap)
+                .build();
         entityRows.add(newEntityRow);
       }
     }
@@ -313,236 +316,239 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
     // Finally, we handle ODFVs. For each ODFV ref, we send a TransformFeaturesRequest to the FTS.
     // The request should contain the entity data, the retrieved features, and the request data.
     // All of this data must be bundled together and serialized into the Arrow IPC format.
-    // TODO: avoid hardcoding FTS address
-    final ManagedChannel channel =
-        ManagedChannelBuilder.forTarget("localhost:6569").usePlaintext().build();
-    TransformationServiceGrpc.TransformationServiceBlockingStub stub =
-        TransformationServiceGrpc.newBlockingStub(channel);
+    if (onDemandFeatureReferences.size() > 0) {
+      // TODO: avoid hardcoding FTS address
+      final ManagedChannel channel =
+          ManagedChannelBuilder.forTarget("localhost:6569").usePlaintext().build();
+      TransformationServiceGrpc.TransformationServiceBlockingStub stub =
+          TransformationServiceGrpc.newBlockingStub(channel);
 
-    // Augment values, which contains the entity data and retrieved features, with the request data.
-    // Also augmented statuses.
-    for (int i = 0; i < values.size(); i++) {
-      Map<String, ValueProto.Value> rowValues = values.get(i);
-      Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
+      // Augment values, which contains the entity data and retrieved features, with the request
+      // data.
+      // Also augmented statuses.
+      for (int i = 0; i < values.size(); i++) {
+        Map<String, ValueProto.Value> rowValues = values.get(i);
+        Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
 
-      for (Map.Entry<String, List<ValueProto.Value>> entry : requestDataFeatures.entrySet()) {
-        String key = entry.getKey();
-        List<ValueProto.Value> fieldValues = entry.getValue();
-        rowValues.put(key, fieldValues.get(i));
-        rowStatuses.put(key, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+        for (Map.Entry<String, List<ValueProto.Value>> entry : requestDataFeatures.entrySet()) {
+          String key = entry.getKey();
+          List<ValueProto.Value> fieldValues = entry.getValue();
+          rowValues.put(key, fieldValues.get(i));
+          rowStatuses.put(key, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+        }
       }
-    }
 
-    // Convert values into Arrow IPC format by construct a VectorSchemaRoot. Start by constructing
-    // the named columns.
-    Map<String, FieldVector> columnNameToColumn = new HashMap<String, FieldVector>();
-    BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
-    Map<String, ValueProto.Value> firstAugmentedValue = values.get(0);
-    for (Map.Entry<String, ValueProto.Value> entry : firstAugmentedValue.entrySet()) {
-      // The Python FTS does not expect full feature names, so we extract the feature name.
-      String fullFeatureName = entry.getKey();
-      String columnName = FeatureV2.getFeatureName(fullFeatureName);
-      ValueProto.Value value = entry.getValue();
-      FieldVector column;
-      ValueProto.Value.ValCase valCase = value.getValCase();
-      // TODO: support all Feast types
-      switch (valCase) {
-        case INT32_VAL:
-          column = new IntVector(columnName, allocator);
-          break;
-        case INT64_VAL:
-          column = new BigIntVector(columnName, allocator);
-          break;
-        case DOUBLE_VAL:
-          column = new Float8Vector(columnName, allocator);
-          break;
-        case FLOAT_VAL:
-          column = new Float4Vector(columnName, allocator);
-          break;
-        default:
-          column = null;
-      }
-      column.allocateNew();
-      columnNameToColumn.put(columnName, column);
-    }
-
-    // Add in all the data, row by row.
-    for (int i = 0; i < values.size(); i++) {
-      Map<String, ValueProto.Value> augmentedValues = values.get(i);
-
-      for (Map.Entry<String, ValueProto.Value> entry : augmentedValues.entrySet()) {
+      // Convert values into Arrow IPC format by construct a VectorSchemaRoot. Start by constructing
+      // the named columns.
+      Map<String, FieldVector> columnNameToColumn = new HashMap<String, FieldVector>();
+      BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
+      Map<String, ValueProto.Value> firstAugmentedValue = values.get(0);
+      for (Map.Entry<String, ValueProto.Value> entry : firstAugmentedValue.entrySet()) {
+        // The Python FTS does not expect full feature names, so we extract the feature name.
         String fullFeatureName = entry.getKey();
         String columnName = FeatureV2.getFeatureName(fullFeatureName);
         ValueProto.Value value = entry.getValue();
-
-        FieldVector column = columnNameToColumn.get(columnName);
+        FieldVector column;
         ValueProto.Value.ValCase valCase = value.getValCase();
         // TODO: support all Feast types
         switch (valCase) {
           case INT32_VAL:
-            ((IntVector) column).setSafe(i, value.getInt32Val());
+            column = new IntVector(columnName, allocator);
             break;
           case INT64_VAL:
-            ((BigIntVector) column).setSafe(i, value.getInt64Val());
+            column = new BigIntVector(columnName, allocator);
             break;
           case DOUBLE_VAL:
-            ((Float8Vector) column).setSafe(i, value.getDoubleVal());
+            column = new Float8Vector(columnName, allocator);
             break;
           case FLOAT_VAL:
-            ((Float4Vector) column).setSafe(i, value.getFloatVal());
+            column = new Float4Vector(columnName, allocator);
             break;
           default:
             column = null;
         }
+        column.allocateNew();
+        columnNameToColumn.put(columnName, column);
       }
-    }
 
-    // Construct the VectorSchemaRoot.
-    List<Field> columnFields = new ArrayList<Field>();
-    List<FieldVector> columns = new ArrayList<FieldVector>();
-    for (FieldVector column : columnNameToColumn.values()) {
-      column.setValueCount(values.size());
-      columnFields.add(column.getField());
-      columns.add(column);
-    }
-    VectorSchemaRoot schemaRoot = new VectorSchemaRoot(columnFields, columns);
+      // Add in all the data, row by row.
+      for (int i = 0; i < values.size(); i++) {
+        Map<String, ValueProto.Value> augmentedValues = values.get(i);
 
-    // Serialize into Arrow IPC format.
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    ArrowFileWriter writer = new ArrowFileWriter(schemaRoot, null, Channels.newChannel(out));
-    try {
-      writer.start();
-      writer.writeBatch();
-      writer.end();
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-    byte[] byteData = out.toByteArray();
-    ByteString inputData = ByteString.copyFrom(byteData);
-    ValueType transformationInput = ValueType.newBuilder().setArrowValue(inputData).build();
+        for (Map.Entry<String, ValueProto.Value> entry : augmentedValues.entrySet()) {
+          String fullFeatureName = entry.getKey();
+          String columnName = FeatureV2.getFeatureName(fullFeatureName);
+          ValueProto.Value value = entry.getValue();
 
-    // Send out requests to the FTS.
-    Set<String> onDemandFeatureStringReferences =
-        onDemandFeatureReferences.stream()
-            .map(r -> FeatureV2.getFeatureStringRef(r))
-            .collect(Collectors.toSet());
-    for (FeatureReferenceV2 featureReference : onDemandFeatureReferences) {
-      String onDemandFeatureViewName = featureReference.getFeatureTable();
-      TransformFeaturesRequest transformFeaturesRequest =
-          TransformFeaturesRequest.newBuilder()
-              .setOnDemandFeatureViewName(onDemandFeatureViewName)
-              .setProject(projectName)
-              .setTransformationInput(transformationInput)
-              .build();
-
-      TransformFeaturesResponse transformFeaturesResponse =
-          stub.transformFeatures(transformFeaturesRequest);
-
-      // Add response data back into values. Also add statuses.
-      try {
-        ArrowFileReader reader =
-            new ArrowFileReader(
-                new ByteArrayReadableSeekableByteChannel(
-                    transformFeaturesResponse
-                        .getTransformationOutput()
-                        .getArrowValue()
-                        .toByteArray()),
-                allocator);
-        reader.loadNextBatch();
-        VectorSchemaRoot readBatch = reader.getVectorSchemaRoot();
-
-        Schema responseSchema = readBatch.getSchema();
-        List<Field> responseFields = responseSchema.getFields();
-        for (Field field : responseFields) {
-          String columnName = field.getName();
-          String fullFeatureName = onDemandFeatureViewName + ":" + columnName;
-          ArrowType columnType = field.getType();
-
-          // The response will contain all features for the specified ODFV, so we
-          // skip the features that were not requested.
-          if (!onDemandFeatureStringReferences.contains(fullFeatureName)) {
-            continue;
-          }
-
-          FieldVector fieldVector = readBatch.getVector(field);
-          int valueCount = fieldVector.getValueCount();
-
+          FieldVector column = columnNameToColumn.get(columnName);
+          ValueProto.Value.ValCase valCase = value.getValCase();
           // TODO: support all Feast types
-          if (columnType instanceof ArrowType.Int) {
-            int bitWidth = ((ArrowType.Int) columnType).getBitWidth();
-            if (bitWidth == 64) {
-              // handle as int64
-              for (int i = 0; i < valueCount; i++) {
-                long int64Value = ((BigIntVector) fieldVector).get(i);
-                Map<String, ValueProto.Value> rowValues = values.get(i);
-                Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
-                ValueProto.Value value =
-                    ValueProto.Value.newBuilder().setInt64Val(int64Value).build();
-                rowValues.put(fullFeatureName, value);
-                rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
-              }
-            } else if (bitWidth == 32) {
-              // handle as int32
-              for (int i = 0; i < valueCount; i++) {
-                int intValue = ((IntVector) fieldVector).get(i);
-                Map<String, ValueProto.Value> rowValues = values.get(i);
-                Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
-                ValueProto.Value value =
-                    ValueProto.Value.newBuilder().setInt32Val(intValue).build();
-                rowValues.put(fullFeatureName, value);
-                rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
-              }
-            }
-          } else if (columnType instanceof ArrowType.FloatingPoint) {
-            FloatingPointPrecision precision =
-                ((ArrowType.FloatingPoint) columnType).getPrecision();
-            if (precision == FloatingPointPrecision.DOUBLE) {
-              // handle as double
-              for (int i = 0; i < valueCount; i++) {
-                double doubleValue = ((Float8Vector) fieldVector).get(i);
-                Map<String, ValueProto.Value> rowValues = values.get(i);
-                Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
-                ValueProto.Value value =
-                    ValueProto.Value.newBuilder().setDoubleVal(doubleValue).build();
-                rowValues.put(fullFeatureName, value);
-                rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
-              }
-            } else if (precision == FloatingPointPrecision.SINGLE) {
-              // handle as float
-              for (int i = 0; i < valueCount; i++) {
-                float floatValue = ((Float4Vector) fieldVector).get(i);
-                Map<String, ValueProto.Value> rowValues = values.get(i);
-                Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
-                ValueProto.Value value =
-                    ValueProto.Value.newBuilder().setFloatVal(floatValue).build();
-                rowValues.put(fullFeatureName, value);
-                rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
-              }
-            }
+          switch (valCase) {
+            case INT32_VAL:
+              ((IntVector) column).setSafe(i, value.getInt32Val());
+              break;
+            case INT64_VAL:
+              ((BigIntVector) column).setSafe(i, value.getInt64Val());
+              break;
+            case DOUBLE_VAL:
+              ((Float8Vector) column).setSafe(i, value.getDoubleVal());
+              break;
+            case FLOAT_VAL:
+              ((Float4Vector) column).setSafe(i, value.getFloatVal());
+              break;
+            default:
+              column = null;
           }
         }
+      }
+
+      // Construct the VectorSchemaRoot.
+      List<Field> columnFields = new ArrayList<Field>();
+      List<FieldVector> columns = new ArrayList<FieldVector>();
+      for (FieldVector column : columnNameToColumn.values()) {
+        column.setValueCount(values.size());
+        columnFields.add(column.getField());
+        columns.add(column);
+      }
+      VectorSchemaRoot schemaRoot = new VectorSchemaRoot(columnFields, columns);
+
+      // Serialize into Arrow IPC format.
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      ArrowFileWriter writer = new ArrowFileWriter(schemaRoot, null, Channels.newChannel(out));
+      try {
+        writer.start();
+        writer.writeBatch();
+        writer.end();
       } catch (IOException e) {
         e.printStackTrace();
       }
-    }
+      byte[] byteData = out.toByteArray();
+      ByteString inputData = ByteString.copyFrom(byteData);
+      ValueType transformationInput = ValueType.newBuilder().setArrowValue(inputData).build();
 
-    channel.shutdownNow();
+      // Send out requests to the FTS.
+      Set<String> onDemandFeatureStringReferences =
+          onDemandFeatureReferences.stream()
+              .map(r -> FeatureV2.getFeatureStringRef(r))
+              .collect(Collectors.toSet());
+      for (FeatureReferenceV2 featureReference : onDemandFeatureReferences) {
+        String onDemandFeatureViewName = featureReference.getFeatureTable();
+        TransformFeaturesRequest transformFeaturesRequest =
+            TransformFeaturesRequest.newBuilder()
+                .setOnDemandFeatureViewName(onDemandFeatureViewName)
+                .setProject(projectName)
+                .setTransformationInput(transformationInput)
+                .build();
 
-    // Remove all features that were added as inputs for ODFVs.
-    Set<String> addedFeatureStringReferences =
-        addedFeatureReferences.stream()
-            .map(r -> FeatureV2.getFeatureStringRef(r))
-            .collect(Collectors.toSet());
-    for (int i = 0; i < values.size(); i++) {
-      Map<String, ValueProto.Value> rowValues = values.get(i);
-      Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
-      List<String> keysToRemove =
-          rowValues.keySet().stream()
-              .filter(k -> addedFeatureStringReferences.contains(k))
-              .collect(Collectors.toList());
-      for (String key : keysToRemove) {
-        rowValues.remove(key);
-        rowStatuses.remove(key);
+        TransformFeaturesResponse transformFeaturesResponse =
+            stub.transformFeatures(transformFeaturesRequest);
+
+        // Add response data back into values. Also add statuses.
+        try {
+          ArrowFileReader reader =
+              new ArrowFileReader(
+                  new ByteArrayReadableSeekableByteChannel(
+                      transformFeaturesResponse
+                          .getTransformationOutput()
+                          .getArrowValue()
+                          .toByteArray()),
+                  allocator);
+          reader.loadNextBatch();
+          VectorSchemaRoot readBatch = reader.getVectorSchemaRoot();
+
+          Schema responseSchema = readBatch.getSchema();
+          List<Field> responseFields = responseSchema.getFields();
+          for (Field field : responseFields) {
+            String columnName = field.getName();
+            String fullFeatureName = onDemandFeatureViewName + ":" + columnName;
+            ArrowType columnType = field.getType();
+
+            // The response will contain all features for the specified ODFV, so we
+            // skip the features that were not requested.
+            if (!onDemandFeatureStringReferences.contains(fullFeatureName)) {
+              continue;
+            }
+
+            FieldVector fieldVector = readBatch.getVector(field);
+            int valueCount = fieldVector.getValueCount();
+
+            // TODO: support all Feast types
+            if (columnType instanceof ArrowType.Int) {
+              int bitWidth = ((ArrowType.Int) columnType).getBitWidth();
+              if (bitWidth == 64) {
+                // handle as int64
+                for (int i = 0; i < valueCount; i++) {
+                  long int64Value = ((BigIntVector) fieldVector).get(i);
+                  Map<String, ValueProto.Value> rowValues = values.get(i);
+                  Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
+                  ValueProto.Value value =
+                      ValueProto.Value.newBuilder().setInt64Val(int64Value).build();
+                  rowValues.put(fullFeatureName, value);
+                  rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+                }
+              } else if (bitWidth == 32) {
+                // handle as int32
+                for (int i = 0; i < valueCount; i++) {
+                  int intValue = ((IntVector) fieldVector).get(i);
+                  Map<String, ValueProto.Value> rowValues = values.get(i);
+                  Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
+                  ValueProto.Value value =
+                      ValueProto.Value.newBuilder().setInt32Val(intValue).build();
+                  rowValues.put(fullFeatureName, value);
+                  rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+                }
+              }
+            } else if (columnType instanceof ArrowType.FloatingPoint) {
+              FloatingPointPrecision precision =
+                  ((ArrowType.FloatingPoint) columnType).getPrecision();
+              if (precision == FloatingPointPrecision.DOUBLE) {
+                // handle as double
+                for (int i = 0; i < valueCount; i++) {
+                  double doubleValue = ((Float8Vector) fieldVector).get(i);
+                  Map<String, ValueProto.Value> rowValues = values.get(i);
+                  Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
+                  ValueProto.Value value =
+                      ValueProto.Value.newBuilder().setDoubleVal(doubleValue).build();
+                  rowValues.put(fullFeatureName, value);
+                  rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+                }
+              } else if (precision == FloatingPointPrecision.SINGLE) {
+                // handle as float
+                for (int i = 0; i < valueCount; i++) {
+                  float floatValue = ((Float4Vector) fieldVector).get(i);
+                  Map<String, ValueProto.Value> rowValues = values.get(i);
+                  Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
+                  ValueProto.Value value =
+                      ValueProto.Value.newBuilder().setFloatVal(floatValue).build();
+                  rowValues.put(fullFeatureName, value);
+                  rowStatuses.put(fullFeatureName, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+                }
+              }
+            }
+          }
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
+
+      channel.shutdownNow();
+
+      // Remove all features that were added as inputs for ODFVs.
+      Set<String> addedFeatureStringReferences =
+          addedFeatureReferences.stream()
+              .map(r -> FeatureV2.getFeatureStringRef(r))
+              .collect(Collectors.toSet());
+      for (int i = 0; i < values.size(); i++) {
+        Map<String, ValueProto.Value> rowValues = values.get(i);
+        Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
+        List<String> keysToRemove =
+            rowValues.keySet().stream()
+                .filter(k -> addedFeatureStringReferences.contains(k))
+                .collect(Collectors.toList());
+        for (String key : keysToRemove) {
+          rowValues.remove(key);
+          rowStatuses.remove(key);
+        }
       }
     }
 
