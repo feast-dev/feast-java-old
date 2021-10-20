@@ -53,6 +53,7 @@ public class OnlineServingServiceTest {
   @Mock CachedSpecService specService;
   @Mock Tracer tracer;
   @Mock OnlineRetriever retrieverV2;
+  private String featureTransformationServer;
 
   private OnlineServingServiceV2 onlineServingServiceV2;
 
@@ -63,7 +64,11 @@ public class OnlineServingServiceTest {
   public void setUp() {
     initMocks(this);
     onlineServingServiceV2 =
-        new OnlineServingServiceV2(retrieverV2, tracer, new CoreFeatureSpecRetriever(specService));
+        new OnlineServingServiceV2(
+            retrieverV2,
+            tracer,
+            new CoreFeatureSpecRetriever(specService),
+            featureTransformationServer);
 
     mockedFeatureRows = new ArrayList<>();
     mockedFeatureRows.add(
