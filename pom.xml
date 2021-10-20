@@ -691,7 +691,7 @@
                 </executions>
                 <configuration>
                     <classpathDependencyExcludes>
-                        <classpathDependencyExcludes>${groupId}:${artifactId}</classpathDependencyExcludes>
+                        <classpathDependencyExcludes>${project.groupId}:${project.artifactId}</classpathDependencyExcludes>
                     </classpathDependencyExcludes>
                     <additionalClasspathElements>
                         <additionalClasspathElement>${project.build.outputDirectory}</additionalClasspathElement>
