@@ -262,6 +262,7 @@ public class SpecService {
    *
    * @param newEntitySpec EntitySpecV2 that will be used to create or update an Entity.
    * @param projectName Project namespace of Entity which is to be created/updated
+   * @return response of the operation
    */
   @Transactional
   public ApplyEntityResponse applyEntity(
@@ -314,6 +315,7 @@ public class SpecService {
    * Resolves the project name by returning name if given, autofilling default project otherwise.
    *
    * @param projectName name of the project to resolve.
+   * @return project name
    */
   public static String resolveProjectName(String projectName) {
     return (projectName.isEmpty()) ? Project.DEFAULT_NAME : projectName;
@@ -324,6 +326,7 @@ public class SpecService {
    *
    * @param updateStoreRequest containing the new store definition
    * @return UpdateStoreResponse containing the new store definition
+   * @throws InvalidProtocolBufferException if protobuf exception occurs
    */
   @Transactional
   public UpdateStoreResponse updateStore(UpdateStoreRequest updateStoreRequest)

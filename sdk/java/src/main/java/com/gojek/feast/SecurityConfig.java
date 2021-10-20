@@ -26,15 +26,23 @@ public abstract class SecurityConfig {
   /**
    * Enables authentication If specified, the call credentials used to provide credentials to
    * authenticate with Feast.
+   *
+   * @return credentials
    */
   public abstract Optional<CallCredentials> getCredentials();
 
-  /** Whether to use TLS transport security is use when connecting to Feast. */
+  /**
+   * Whether to use TLS transport security is use when connecting to Feast.
+   *
+   * @return true if enabled
+   */
   public abstract boolean isTLSEnabled();
 
   /**
    * If specified and TLS is enabled, provides path to TLS certificate use the verify Service
    * identity.
+   *
+   * @return certificate path
    */
   public abstract Optional<String> getCertificatePath();
 

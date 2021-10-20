@@ -65,6 +65,11 @@ public class EntityV2 extends AbstractTimestampEntity {
    *
    * <p>This data model supports Scalar Entity and would allow ease of discovery of entities and
    * reasoning when used in association with FeatureTable.
+   *
+   * @param name name
+   * @param description description
+   * @param type type
+   * @param labels labels
    */
   public EntityV2(
       String name, String description, ValueType.Enum type, Map<String, String> labels) {

@@ -45,6 +45,7 @@ public class GoogleAuthCredentials extends CallCredentials {
    *
    * @param options a map of options, Required unless specified: audience - Optional, Sets the
    *     target audience of the token obtained.
+   * @throws IOException if credentials are not available
    */
   public GoogleAuthCredentials(Map<String, String> options) throws IOException {
     String targetAudience = options.getOrDefault("audience", "https://localhost");

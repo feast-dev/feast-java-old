@@ -34,32 +34,35 @@ import java.util.UUID;
 /** MessageAuditLogEntry records the handling of a Protobuf message by a service call. */
 @AutoValue
 public abstract class MessageAuditLogEntry extends AuditLogEntry {
-  /** Id used to identify the service call that the log entry is recording */
+  /** @return Id used to identify the service call that the log entry is recording */
   public abstract UUID getId();
 
-  /** The name of the service that was used to handle the service call. */
+  /** @return The name of the service that was used to handle the service call. */
   public abstract String getService();
 
-  /** The name of the method that was used to handle the service call. */
+  /** @return The name of the method that was used to handle the service call. */
   public abstract String getMethod();
 
-  /** The request Protobuf {@link Message} that was passed to the Service in the service call. */
+  /**
+   * @return The request Protobuf {@link Message} that was passed to the Service in the service
+   *     call.
+   */
   public abstract Message getRequest();
 
   /**
-   * The response Protobuf {@link Message} that was passed to the Service in the service call. May
-   * be an {@link Empty} protobuf no request could be collected due to an error.
+   * @return The response Protobuf {@link Message} that was passed to the Service in the service
+   *     call. May be an {@link Empty} protobuf no request could be collected due to an error.
    */
   public abstract Message getResponse();
 
   /**
-   * The authenticated identity that was assumed during the handling of the service call. For
-   * example, the user id or email that identifies the user making the call. Empty if the service
-   * call is not authenticated.
+   * @return The authenticated identity that was assumed during the handling of the service call.
+   *     For example, the user id or email that identifies the user making the call. Empty if the
+   *     service call is not authenticated.
    */
   public abstract String getIdentity();
 
-  /** The result status code of the service call. */
+  /** @return The result status code of the service call. */
   public abstract Code getStatusCode();
 
   @AutoValue.Builder

@@ -44,6 +44,10 @@ public class TestUtil {
 
   /**
    * Compare if two Feature Table specs are equal. Disregards order of features/entities in spec.
+   *
+   * @param spec one spec
+   * @param otherSpec the other spec
+   * @return true if specs equal
    */
   public static boolean compareFeatureTableSpec(FeatureTableSpec spec, FeatureTableSpec otherSpec) {
     spec =

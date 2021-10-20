@@ -33,6 +33,7 @@ public interface OnlineRetrieverV2 {
    * @param project name of project to request features from.
    * @param entityRows list of entity rows to request features for.
    * @param featureReferences specifies the FeatureTable to retrieve data from
+   * @param entityNames name of entities
    * @return list of {@link Feature}s corresponding to data retrieved for each entity row from
    *     FeatureTable specified in FeatureTable request.
    */

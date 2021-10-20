@@ -24,7 +24,11 @@ import feast.proto.core.DataFormatProto.StreamFormat;
 import feast.proto.core.DataSourceProto.DataSource;
 
 public class DataSourceValidator {
-  /** Validate if the given DataSource protobuf spec is valid. */
+  /**
+   * Validate if the given DataSource protobuf spec is valid.
+   *
+   * @param spec spec to be validated
+   */
   public static void validate(DataSource spec) {
     switch (spec.getType()) {
       case BATCH_FILE:

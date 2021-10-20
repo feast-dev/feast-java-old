@@ -115,7 +115,7 @@ public class BaseIT {
   /**
    * Truncates all tables in Database (between tests or flows). Retries on deadlock
    *
-   * @throws SQLException
+   * @throws SQLException when a SQL exception occurs
    */
   public static void cleanTables() throws SQLException {
     Connection connection =
@@ -156,7 +156,12 @@ public class BaseIT {
     }
   }
 
-  /** Used to determine SequentialFlows */
+  /**
+   * Used to determine SequentialFlows
+   *
+   * @param testInfo test info
+   * @return true if test is sequential
+   */
   public Boolean isSequentialTest(TestInfo testInfo) {
     try {
       testInfo.getTestClass().get().asSubclass(SequentialFlow.class);

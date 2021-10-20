@@ -21,10 +21,10 @@ import com.google.auto.value.AutoValue;
 /** TransitionAuditLogEntry records a transition in state/status in a specific resource. */
 @AutoValue
 public abstract class TransitionAuditLogEntry extends AuditLogEntry {
-  /** The resource which the state/status transition occured. */
+  /** @return The resource which the state/status transition occured. */
   public abstract LogResource getResource();
 
-  /** The end status with the resource transition to. */
+  /** @return The end status with the resource transition to. */
   public abstract String getStatus();
 
   /**
@@ -35,6 +35,7 @@ public abstract class TransitionAuditLogEntry extends AuditLogEntry {
    * @param version The version of Feast producing this {@link AuditLogEntry}.
    * @param resource the resource which the transtion occured
    * @param status the end status which the resource transitioned to.
+   * @return log entry to record a transition in state/status in a specific resource
    */
   public static TransitionAuditLogEntry of(
       String component, String version, LogResource resource, String status) {

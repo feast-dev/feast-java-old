@@ -38,10 +38,12 @@ public @interface OneOfStrings {
   /** @return Default error message that is returned if the incorrect value is set */
   String message() default "Field value must be one of the following: {value}";
 
-  /** Allows for the specification of validation groups to which this constraint belongs. */
+  /** @return Allows for the specification of validation groups to which this constraint belongs. */
   Class<?>[] groups() default {};
 
-  /** An attribute payload that can be used to assign custom payload objects to a constraint. */
+  /**
+   * @return An attribute payload that can be used to assign custom payload objects to a constraint.
+   */
   Class<? extends Payload>[] payload() default {};
 
   /** @return Default value that is returned if no allowed values are configured */
