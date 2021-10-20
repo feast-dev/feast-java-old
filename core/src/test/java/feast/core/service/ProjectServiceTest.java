@@ -16,10 +16,8 @@
  */
 package feast.core.service;
 
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.*;
 import static org.mockito.MockitoAnnotations.initMocks;
 
 import feast.core.dao.ProjectRepository;
@@ -29,16 +27,12 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 
 public class ProjectServiceTest {
 
   @Mock private ProjectRepository projectRepository;
-  @Rule public final ExpectedException expectedException = ExpectedException.none();
-
   private ProjectService projectService;
 
   @Before
@@ -75,8 +69,9 @@ public class ProjectServiceTest {
 
   @Test
   public void shouldNotArchiveDefaultProject() {
-    expectedException.expect(IllegalArgumentException.class);
-    this.projectService.archiveProject(Project.DEFAULT_NAME);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> this.projectService.archiveProject(Project.DEFAULT_NAME));
   }
 
   @Test(expected = IllegalArgumentException.class)

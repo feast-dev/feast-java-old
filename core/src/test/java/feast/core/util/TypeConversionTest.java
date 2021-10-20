@@ -17,8 +17,8 @@
 package feast.core.util;
 
 import static com.jayway.jsonpath.matchers.JsonPathMatchers.hasJsonPath;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
-import static org.junit.Assert.*;
 
 import com.google.protobuf.Timestamp;
 import java.util.*;
