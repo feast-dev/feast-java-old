@@ -81,14 +81,19 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
   private final Tracer tracer;
   private final OnlineRetrieverV2 retriever;
   private final FeatureSpecRetriever featureSpecRetriever;
+  private final String featureTransformationServer;
   static final int INT64_BITWIDTH = 64;
   static final int INT32_BITWIDTH = 32;
 
   public OnlineServingServiceV2(
-      OnlineRetrieverV2 retriever, Tracer tracer, FeatureSpecRetriever featureSpecRetriever) {
+      OnlineRetrieverV2 retriever,
+      Tracer tracer,
+      FeatureSpecRetriever featureSpecRetriever,
+      String featureTransformationServer) {
     this.retriever = retriever;
     this.tracer = tracer;
     this.featureSpecRetriever = featureSpecRetriever;
+    this.featureTransformationServer = featureTransformationServer;
   }
 
   /** {@inheritDoc} */
@@ -262,10 +267,9 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
 
     // Handle ODFVs. For each ODFV reference, we send a TransformFeaturesRequest to the FTS.
     // The request should contain the entity data, the retrieved features, and the request data.
-    if (!onDemandFeatureReferences.isEmpty()) {
-      // TODO: avoid hardcoding FTS address
+    if (!onDemandFeatureReferences.isEmpty() && this.featureTransformationServer != null) {
       final ManagedChannel channel =
-          ManagedChannelBuilder.forTarget("localhost:6569").usePlaintext().build();
+          ManagedChannelBuilder.forTarget(this.featureTransformationServer).usePlaintext().build();
       TransformationServiceGrpc.TransformationServiceBlockingStub stub =
           TransformationServiceGrpc.newBlockingStub(channel);
 
