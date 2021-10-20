@@ -126,11 +126,11 @@ public class ServingServiceConfigV2 {
     log.info("Created CoreFeatureSpecRetriever");
     featureSpecRetriever = new CoreFeatureSpecRetriever(specService);
 
-    final String featureTransformationServer = feastProperties.getFeatureTransformationServer();
+    final String transformationServiceEndpoint = feastProperties.getTransformationServiceEndpoint();
 
     servingService =
         new OnlineServingServiceV2(
-            retrieverV2, tracer, featureSpecRetriever, featureTransformationServer);
+            retrieverV2, tracer, featureSpecRetriever, transformationServiceEndpoint);
 
     return servingService;
   }
@@ -168,11 +168,11 @@ public class ServingServiceConfigV2 {
     final LocalRegistryRepo repo = new LocalRegistryRepo(Paths.get(feastProperties.getRegistry()));
     featureSpecRetriever = new RegistryFeatureSpecRetriever(repo);
 
-    final String featureTransformationServer = feastProperties.getFeatureTransformationServer();
+    final String transformationServiceEndpoint = feastProperties.getTransformationServiceEndpoint();
 
     servingService =
         new OnlineServingServiceV2(
-            retrieverV2, tracer, featureSpecRetriever, featureTransformationServer);
+            retrieverV2, tracer, featureSpecRetriever, transformationServiceEndpoint);
 
     return servingService;
   }

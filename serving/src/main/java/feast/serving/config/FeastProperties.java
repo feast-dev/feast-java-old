@@ -82,14 +82,14 @@ public class FeastProperties {
     this.registry = registry;
   }
 
-  private String featureTransformationServer;
+  private String transformationServiceEndpoint;
 
-  public String getFeatureTransformationServer() {
-    return featureTransformationServer;
+  public String getTransformationServiceEndpoint() {
+    return transformationServiceEndpoint;
   }
 
-  public void setFeatureTransformationServer(final String featureTransformationServer) {
-    this.featureTransformationServer = featureTransformationServer;
+  public void setTransformationServiceEndpoint(final String transformationServiceEndpoint) {
+    this.transformationServiceEndpoint = transformationServiceEndpoint;
   }
 
   private CoreAuthenticationProperties coreAuthentication;

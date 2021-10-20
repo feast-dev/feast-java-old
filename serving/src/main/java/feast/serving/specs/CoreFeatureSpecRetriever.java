@@ -21,7 +21,6 @@ import feast.proto.core.FeatureProto;
 import feast.proto.core.FeatureViewProto;
 import feast.proto.core.OnDemandFeatureViewProto;
 import feast.proto.serving.ServingAPIProto;
-import feast.serving.exception.SpecRetrievalException;
 import java.util.List;
 
 public class CoreFeatureSpecRetriever implements FeatureSpecRetriever {
@@ -52,18 +51,15 @@ public class CoreFeatureSpecRetriever implements FeatureSpecRetriever {
   @Override
   public FeatureViewProto.FeatureViewSpec getBatchFeatureViewSpec(
       String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
-    throw new SpecRetrievalException(
-        String.format(
-            "Unable to find feature view spec with name: %s", featureReference.getFeatureTable()));
+    throw new UnsupportedOperationException(
+        String.format("Feast Core does not support getting feature view specs."));
   }
 
   @Override
   public OnDemandFeatureViewProto.OnDemandFeatureViewSpec getOnDemandFeatureViewSpec(
       String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
-    throw new SpecRetrievalException(
-        String.format(
-            "Unable to find on demand feature view spec with name: %s",
-            featureReference.getFeatureTable()));
+    throw new UnsupportedOperationException(
+        String.format("Feast Core does not support on demand feature views."));
   }
 
   @Override
