@@ -26,6 +26,9 @@ import feast.proto.serving.ServingAPIProto.GetFeastServingInfoRequest;
 import feast.proto.serving.ServingAPIProto.GetFeastServingInfoResponse;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesRequestV2;
 import feast.proto.serving.ServingAPIProto.GetOnlineFeaturesResponse;
+import feast.proto.serving.TransformationServiceAPIProto.TransformFeaturesRequest;
+import feast.proto.serving.TransformationServiceAPIProto.TransformFeaturesResponse;
+import feast.proto.serving.TransformationServiceAPIProto.ValueType;
 import feast.proto.types.ValueProto;
 import feast.serving.exception.SpecRetrievalException;
 import feast.serving.specs.FeatureSpecRetriever;
@@ -35,7 +38,12 @@ import feast.storage.api.retriever.OnlineRetrieverV2;
 import io.grpc.Status;
 import io.opentracing.Span;
 import io.opentracing.Tracer;
-import java.util.*;
+import java.io.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -48,12 +56,17 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
   private final Tracer tracer;
   private final OnlineRetrieverV2 retriever;
   private final FeatureSpecRetriever featureSpecRetriever;
+  private final OnlineTransformationService onlineTransformationService;
 
   public OnlineServingServiceV2(
-      OnlineRetrieverV2 retriever, Tracer tracer, FeatureSpecRetriever featureSpecRetriever) {
+      OnlineRetrieverV2 retriever,
+      Tracer tracer,
+      FeatureSpecRetriever featureSpecRetriever,
+      OnlineTransformationService onlineTransformationService) {
     this.retriever = retriever;
     this.tracer = tracer;
     this.featureSpecRetriever = featureSpecRetriever;
+    this.onlineTransformationService = onlineTransformationService;
   }
 
   /** {@inheritDoc} */
@@ -67,15 +80,51 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
 
   @Override
   public GetOnlineFeaturesResponse getOnlineFeatures(GetOnlineFeaturesRequestV2 request) {
-    String projectName = request.getProject();
-    List<FeatureReferenceV2> featureReferences = request.getFeaturesList();
-
     // Autofill default project if project is not specified
+    String projectName = request.getProject();
     if (projectName.isEmpty()) {
       projectName = "default";
     }
 
-    List<GetOnlineFeaturesRequestV2.EntityRow> entityRows = request.getEntityRowsList();
+    // Split all feature references into non-ODFV (e.g. batch and stream) references and ODFV.
+    List<FeatureReferenceV2> allFeatureReferences = request.getFeaturesList();
+    List<FeatureReferenceV2> featureReferences =
+        allFeatureReferences.stream()
+            .filter(r -> !this.featureSpecRetriever.isOnDemandFeatureReference(r))
+            .collect(Collectors.toList());
+    List<FeatureReferenceV2> onDemandFeatureReferences =
+        allFeatureReferences.stream()
+            .filter(r -> this.featureSpecRetriever.isOnDemandFeatureReference(r))
+            .collect(Collectors.toList());
+
+    // Get the set of request data feature names and feature inputs from the ODFV references.
+    Pair<Set<String>, List<FeatureReferenceV2>> pair =
+        this.onlineTransformationService.extractRequestDataFeatureNamesAndOnDemandFeatureInputs(
+            onDemandFeatureReferences, projectName);
+    Set<String> requestDataFeatureNames = pair.getLeft();
+    List<FeatureReferenceV2> onDemandFeatureInputs = pair.getRight();
+
+    // Add on demand feature inputs to list of feature references to retrieve.
+    Set<FeatureReferenceV2> addedFeatureReferences = new HashSet<FeatureReferenceV2>();
+    for (FeatureReferenceV2 onDemandFeatureInput : onDemandFeatureInputs) {
+      if (!featureReferences.contains(onDemandFeatureInput)) {
+        featureReferences.add(onDemandFeatureInput);
+        addedFeatureReferences.add(onDemandFeatureInput);
+      }
+    }
+
+    // Separate entity rows into entity data and request feature data.
+    Pair<List<GetOnlineFeaturesRequestV2.EntityRow>, Map<String, List<ValueProto.Value>>>
+        entityRowsAndRequestDataFeatures =
+            this.onlineTransformationService.separateEntityRows(requestDataFeatureNames, request);
+    List<GetOnlineFeaturesRequestV2.EntityRow> entityRows =
+        entityRowsAndRequestDataFeatures.getLeft();
+    Map<String, List<ValueProto.Value>> requestDataFeatures =
+        entityRowsAndRequestDataFeatures.getRight();
+    // TODO: error checking on lengths of lists in entityRows and requestDataFeatures
+
+    // Extract values and statuses to be used later in constructing FieldValues for the response.
+    // The online features retrieved will augment these two data structures.
     List<Map<String, ValueProto.Value>> values =
         entityRows.stream().map(r -> new HashMap<>(r.getFieldsMap())).collect(Collectors.toList());
     List<Map<String, GetOnlineFeaturesResponse.FieldStatus>> statuses =
@@ -190,6 +239,71 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
     populateHistogramMetrics(entityRows, featureReferences, projectName);
     populateFeatureCountMetrics(featureReferences, projectName);
 
+    // Handle ODFVs. For each ODFV reference, we send a TransformFeaturesRequest to the FTS.
+    // The request should contain the entity data, the retrieved features, and the request data.
+    if (!onDemandFeatureReferences.isEmpty()) {
+      // Augment values, which contains the entity data and retrieved features, with the request
+      // data. Also augment statuses.
+      for (int i = 0; i < values.size(); i++) {
+        Map<String, ValueProto.Value> rowValues = values.get(i);
+        Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
+
+        for (Map.Entry<String, List<ValueProto.Value>> entry : requestDataFeatures.entrySet()) {
+          String key = entry.getKey();
+          List<ValueProto.Value> fieldValues = entry.getValue();
+          rowValues.put(key, fieldValues.get(i));
+          rowStatuses.put(key, GetOnlineFeaturesResponse.FieldStatus.PRESENT);
+        }
+      }
+
+      // Serialize the augmented values.
+      ValueType transformationInput =
+          this.onlineTransformationService.serializeValuesIntoArrowIPC(values);
+
+      // Send out requests to the FTS and process the responses.
+      Set<String> onDemandFeatureStringReferences =
+          onDemandFeatureReferences.stream()
+              .map(r -> FeatureV2.getFeatureStringRef(r))
+              .collect(Collectors.toSet());
+      for (FeatureReferenceV2 featureReference : onDemandFeatureReferences) {
+        String onDemandFeatureViewName = featureReference.getFeatureTable();
+        TransformFeaturesRequest transformFeaturesRequest =
+            TransformFeaturesRequest.newBuilder()
+                .setOnDemandFeatureViewName(onDemandFeatureViewName)
+                .setProject(projectName)
+                .setTransformationInput(transformationInput)
+                .build();
+
+        TransformFeaturesResponse transformFeaturesResponse =
+            this.onlineTransformationService.transformFeatures(transformFeaturesRequest);
+
+        this.onlineTransformationService.processTransformFeaturesResponse(
+            transformFeaturesResponse,
+            onDemandFeatureViewName,
+            onDemandFeatureStringReferences,
+            values,
+            statuses);
+      }
+
+      // Remove all features that were added as inputs for ODFVs.
+      Set<String> addedFeatureStringReferences =
+          addedFeatureReferences.stream()
+              .map(r -> FeatureV2.getFeatureStringRef(r))
+              .collect(Collectors.toSet());
+      for (int i = 0; i < values.size(); i++) {
+        Map<String, ValueProto.Value> rowValues = values.get(i);
+        Map<String, GetOnlineFeaturesResponse.FieldStatus> rowStatuses = statuses.get(i);
+        List<String> keysToRemove =
+            rowValues.keySet().stream()
+                .filter(k -> addedFeatureStringReferences.contains(k))
+                .collect(Collectors.toList());
+        for (String key : keysToRemove) {
+          rowValues.remove(key);
+          rowStatuses.remove(key);
+        }
+      }
+    }
+
     // Build response field values from entityValuesMap and entityStatusesMap
     // Response field values should be in the same order as the entityRows provided by the user.
     List<GetOnlineFeaturesResponse.FieldValues> fieldValuesList =
@@ -201,6 +315,7 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
                         .putAllStatuses(statuses.get(entityRowIdx))
                         .build())
             .collect(Collectors.toList());
+
     return GetOnlineFeaturesResponse.newBuilder().addAllFieldValues(fieldValuesList).build();
   }
 

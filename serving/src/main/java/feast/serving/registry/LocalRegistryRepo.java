@@ -18,14 +18,22 @@ package feast.serving.registry;
 
 import feast.proto.core.FeatureProto;
 import feast.proto.core.FeatureViewProto;
+import feast.proto.core.OnDemandFeatureViewProto;
 import feast.proto.core.RegistryProto;
 import feast.proto.serving.ServingAPIProto;
 import feast.serving.exception.SpecRetrievalException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class LocalRegistryRepo implements RegistryRepository {
   private final RegistryProto.Registry registry;
+  private Map<String, FeatureViewProto.FeatureViewSpec> featureViewNameToSpec;
+  private Map<String, OnDemandFeatureViewProto.OnDemandFeatureViewSpec>
+      onDemandFeatureViewNameToSpec;
 
   public LocalRegistryRepo(Path localRegistryPath) {
     if (!localRegistryPath.toFile().exists()) {
@@ -38,6 +46,26 @@ public class LocalRegistryRepo implements RegistryRepository {
     } catch (final Exception e) {
       throw new RuntimeException(e);
     }
+
+    final RegistryProto.Registry registry = this.getRegistry();
+    List<FeatureViewProto.FeatureViewSpec> featureViewSpecs =
+        registry.getFeatureViewsList().stream()
+            .map(fv -> fv.getSpec())
+            .collect(Collectors.toList());
+    featureViewNameToSpec =
+        featureViewSpecs.stream()
+            .collect(
+                Collectors.toMap(FeatureViewProto.FeatureViewSpec::getName, Function.identity()));
+    List<OnDemandFeatureViewProto.OnDemandFeatureViewSpec> onDemandFeatureViewSpecs =
+        registry.getOnDemandFeatureViewsList().stream()
+            .map(odfv -> odfv.getSpec())
+            .collect(Collectors.toList());
+    onDemandFeatureViewNameToSpec =
+        onDemandFeatureViewSpecs.stream()
+            .collect(
+                Collectors.toMap(
+                    OnDemandFeatureViewProto.OnDemandFeatureViewSpec::getName,
+                    Function.identity()));
   }
 
   @Override
@@ -48,15 +76,12 @@ public class LocalRegistryRepo implements RegistryRepository {
   @Override
   public FeatureViewProto.FeatureViewSpec getFeatureViewSpec(
       String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
-    final RegistryProto.Registry registry = this.getRegistry();
-    for (final FeatureViewProto.FeatureView featureView : registry.getFeatureViewsList()) {
-      if (featureView.getSpec().getName().equals(featureReference.getFeatureTable())) {
-        return featureView.getSpec();
-      }
+    String featureViewName = featureReference.getFeatureTable();
+    if (featureViewNameToSpec.containsKey(featureViewName)) {
+      return featureViewNameToSpec.get(featureViewName);
     }
     throw new SpecRetrievalException(
-        String.format(
-            "Unable to find feature view with name: %s", featureReference.getFeatureTable()));
+        String.format("Unable to find feature view with name: %s", featureViewName));
   }
 
   @Override
@@ -74,5 +99,23 @@ public class LocalRegistryRepo implements RegistryRepository {
         String.format(
             "Unable to find feature with name: %s in feature view: %s",
             featureReference.getName(), featureReference.getFeatureTable()));
+  }
+
+  @Override
+  public OnDemandFeatureViewProto.OnDemandFeatureViewSpec getOnDemandFeatureViewSpec(
+      String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
+    String onDemandFeatureViewName = featureReference.getFeatureTable();
+    if (onDemandFeatureViewNameToSpec.containsKey(onDemandFeatureViewName)) {
+      return onDemandFeatureViewNameToSpec.get(onDemandFeatureViewName);
+    }
+    throw new SpecRetrievalException(
+        String.format(
+            "Unable to find on demand feature view with name: %s", onDemandFeatureViewName));
+  }
+
+  @Override
+  public boolean isOnDemandFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
+    String onDemandFeatureViewName = featureReference.getFeatureTable();
+    return onDemandFeatureViewNameToSpec.containsKey(onDemandFeatureViewName);
   }
 }

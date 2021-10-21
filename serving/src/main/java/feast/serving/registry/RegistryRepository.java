@@ -18,6 +18,7 @@ package feast.serving.registry;
 
 import feast.proto.core.FeatureProto;
 import feast.proto.core.FeatureViewProto;
+import feast.proto.core.OnDemandFeatureViewProto;
 import feast.proto.core.RegistryProto;
 import feast.proto.serving.ServingAPIProto;
 
@@ -33,4 +34,9 @@ public interface RegistryRepository {
 
   FeatureProto.FeatureSpecV2 getFeatureSpec(
       String projectName, ServingAPIProto.FeatureReferenceV2 featureReference);
+
+  OnDemandFeatureViewProto.OnDemandFeatureViewSpec getOnDemandFeatureViewSpec(
+      String projectName, ServingAPIProto.FeatureReferenceV2 featureReference);
+
+  boolean isOnDemandFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference);
 }

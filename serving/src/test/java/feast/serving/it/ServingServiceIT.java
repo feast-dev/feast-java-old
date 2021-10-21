@@ -51,6 +51,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.web.server.LocalServerPort;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -65,6 +66,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
     properties = {
       "feast.core-cache-refresh-interval=1",
     })
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 @Testcontainers
 public class ServingServiceIT extends BaseAuthIT {
 
@@ -204,6 +206,7 @@ public class ServingServiceIT extends BaseAuthIT {
 
   /** Test that Feast Serving metrics endpoint can be accessed with authentication enabled */
   @Test
+  @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
   public void shouldAllowUnauthenticatedAccessToMetricsEndpoint() throws IOException {
     Request request =
         new Request.Builder()
@@ -216,6 +219,7 @@ public class ServingServiceIT extends BaseAuthIT {
   }
 
   @Test
+  @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
   public void shouldRegisterAndGetOnlineFeatures() {
     // getOnlineFeatures Information
     String projectName = "default";
@@ -265,6 +269,7 @@ public class ServingServiceIT extends BaseAuthIT {
   }
 
   @Test
+  @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
   public void shouldRegisterAndGetOnlineFeaturesWithNotFound() {
     // getOnlineFeatures Information
     String projectName = "default";
@@ -327,6 +332,7 @@ public class ServingServiceIT extends BaseAuthIT {
   }
 
   @Test
+  @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
   public void shouldGetOnlineFeaturesOutsideMaxAge() {
     String projectName = "default";
     String entityName = "driver_id";
@@ -376,6 +382,7 @@ public class ServingServiceIT extends BaseAuthIT {
   }
 
   @Test
+  @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
   public void shouldReturnNotFoundForDiffType() {
     String projectName = "default";
     String entityName = "driver_id";
@@ -425,6 +432,7 @@ public class ServingServiceIT extends BaseAuthIT {
   }
 
   @Test
+  @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
   public void shouldReturnNotFoundForUpdatedType() {
     String projectName = "default";
     String entityName = "driver_id";

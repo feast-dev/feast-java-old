@@ -34,4 +34,17 @@ public class FeatureV2 {
     }
     return ref;
   }
+
+  /**
+   * Accepts either a feature reference of the form "featuretable_name:feature_name" or just a
+   * feature name, and returns just the feature name. For example, given either
+   * "driver_hourly_stats:conv_rate" or "conv_rate", "conv_rate" would be returned.
+   *
+   * @param featureReference {String}
+   * @return Base feature name of the feature reference
+   */
+  public static String getFeatureName(String featureReference) {
+    String[] tokens = featureReference.split(":", 2);
+    return tokens[tokens.length - 1];
+  }
 }

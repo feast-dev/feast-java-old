@@ -18,6 +18,8 @@ package feast.serving.specs;
 
 import com.google.protobuf.Duration;
 import feast.proto.core.FeatureProto;
+import feast.proto.core.FeatureViewProto;
+import feast.proto.core.OnDemandFeatureViewProto;
 import feast.proto.serving.ServingAPIProto;
 import java.util.List;
 
@@ -44,5 +46,24 @@ public class CoreFeatureSpecRetriever implements FeatureSpecRetriever {
   public FeatureProto.FeatureSpecV2 getFeatureSpec(
       String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
     return this.specService.getFeatureSpec(projectName, featureReference);
+  }
+
+  @Override
+  public FeatureViewProto.FeatureViewSpec getBatchFeatureViewSpec(
+      String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
+    throw new UnsupportedOperationException(
+        String.format("Feast Core does not support getting feature view specs."));
+  }
+
+  @Override
+  public OnDemandFeatureViewProto.OnDemandFeatureViewSpec getOnDemandFeatureViewSpec(
+      String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
+    throw new UnsupportedOperationException(
+        String.format("Feast Core does not support on demand feature views."));
+  }
+
+  @Override
+  public boolean isOnDemandFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
+    return false;
   }
 }

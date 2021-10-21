@@ -19,6 +19,7 @@ package feast.serving.specs;
 import com.google.protobuf.Duration;
 import feast.proto.core.FeatureProto;
 import feast.proto.core.FeatureViewProto;
+import feast.proto.core.OnDemandFeatureViewProto;
 import feast.proto.core.RegistryProto;
 import feast.proto.serving.ServingAPIProto;
 import feast.serving.exception.SpecRetrievalException;
@@ -64,5 +65,22 @@ public class RegistryFeatureSpecRetriever implements FeatureSpecRetriever {
   public FeatureProto.FeatureSpecV2 getFeatureSpec(
       String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
     return this.registryRepository.getFeatureSpec(projectName, featureReference);
+  }
+
+  @Override
+  public FeatureViewProto.FeatureViewSpec getBatchFeatureViewSpec(
+      String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
+    return this.registryRepository.getFeatureViewSpec(projectName, featureReference);
+  }
+
+  @Override
+  public OnDemandFeatureViewProto.OnDemandFeatureViewSpec getOnDemandFeatureViewSpec(
+      String projectName, ServingAPIProto.FeatureReferenceV2 featureReference) {
+    return this.registryRepository.getOnDemandFeatureViewSpec(projectName, featureReference);
+  }
+
+  @Override
+  public boolean isOnDemandFeatureReference(ServingAPIProto.FeatureReferenceV2 featureReference) {
+    return this.registryRepository.isOnDemandFeatureReference(featureReference);
   }
 }
