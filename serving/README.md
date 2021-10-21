@@ -88,3 +88,14 @@ with open("/tmp/000000000000.avro", "rb") as f:
     print(df.head(5))
 EOF
 ```
+#### Working with Feast 0.10+ 
+Feast serving supports reading feature values materialized into Redis by feast 0.10+. To configure this, feast-serving 
+needs to be able to read the registry file for the project.
+The location of the registry file can be specified in the `application.yml` like so:
+```yaml
+feast:
+  registry: "src/test/resources/docker-compose/feast10/registry.db"
+```
+
+This changes the behaviour of feast-serving to look up feature view definitions and specifications from the registry file instead 
+of the core service.
