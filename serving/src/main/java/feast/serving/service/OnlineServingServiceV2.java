@@ -62,12 +62,11 @@ public class OnlineServingServiceV2 implements ServingServiceV2 {
       OnlineRetrieverV2 retriever,
       Tracer tracer,
       FeatureSpecRetriever featureSpecRetriever,
-      String transformationServiceEndpoint) {
+      OnlineTransformationService onlineTransformationService) {
     this.retriever = retriever;
     this.tracer = tracer;
     this.featureSpecRetriever = featureSpecRetriever;
-    this.onlineTransformationService =
-        new OnlineTransformationService(transformationServiceEndpoint, featureSpecRetriever);
+    this.onlineTransformationService = onlineTransformationService;
   }
 
   /** {@inheritDoc} */

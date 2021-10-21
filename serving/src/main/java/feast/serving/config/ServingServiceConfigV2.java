@@ -23,6 +23,7 @@ import com.google.cloud.bigtable.data.v2.BigtableDataSettings;
 import com.google.protobuf.AbstractMessageLite;
 import feast.serving.registry.LocalRegistryRepo;
 import feast.serving.service.OnlineServingServiceV2;
+import feast.serving.service.OnlineTransformationService;
 import feast.serving.service.ServingServiceV2;
 import feast.serving.specs.CachedSpecService;
 import feast.serving.specs.CoreFeatureSpecRetriever;
@@ -127,10 +128,12 @@ public class ServingServiceConfigV2 {
     featureSpecRetriever = new CoreFeatureSpecRetriever(specService);
 
     final String transformationServiceEndpoint = feastProperties.getTransformationServiceEndpoint();
+    final OnlineTransformationService onlineTransformationService =
+        new OnlineTransformationService(transformationServiceEndpoint, featureSpecRetriever);
 
     servingService =
         new OnlineServingServiceV2(
-            retrieverV2, tracer, featureSpecRetriever, transformationServiceEndpoint);
+            retrieverV2, tracer, featureSpecRetriever, onlineTransformationService);
 
     return servingService;
   }
@@ -169,10 +172,12 @@ public class ServingServiceConfigV2 {
     featureSpecRetriever = new RegistryFeatureSpecRetriever(repo);
 
     final String transformationServiceEndpoint = feastProperties.getTransformationServiceEndpoint();
+    final OnlineTransformationService onlineTransformationService =
+        new OnlineTransformationService(transformationServiceEndpoint, featureSpecRetriever);
 
     servingService =
         new OnlineServingServiceV2(
-            retrieverV2, tracer, featureSpecRetriever, transformationServiceEndpoint);
+            retrieverV2, tracer, featureSpecRetriever, onlineTransformationService);
 
     return servingService;
   }
