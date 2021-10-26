@@ -329,7 +329,8 @@ public class FeastProperties {
       return new RedisStoreConfig(
           this.config.get("host"),
           Integer.valueOf(this.config.get("port")),
-          Boolean.valueOf(this.config.getOrDefault("ssl", "false")));
+          Boolean.valueOf(this.config.getOrDefault("ssl", "false")),
+          this.config.getOrDefault("password", ""));
     }
 
     public BigTableStoreConfig getBigtableConfig() {

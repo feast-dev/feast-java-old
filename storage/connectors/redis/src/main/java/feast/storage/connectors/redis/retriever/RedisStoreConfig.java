@@ -20,11 +20,13 @@ public class RedisStoreConfig {
   private final String host;
   private final Integer port;
   private final Boolean ssl;
+  private final String password;
 
-  public RedisStoreConfig(String host, Integer port, Boolean ssl) {
+  public RedisStoreConfig(String host, Integer port, Boolean ssl, String password) {
     this.host = host;
     this.port = port;
     this.ssl = ssl;
+    this.password = password;
   }
 
   public String getHost() {
@@ -37,5 +39,9 @@ public class RedisStoreConfig {
 
   public Boolean getSsl() {
     return this.ssl;
+  }
+
+  public String getPassword() {
+    return this.password;
   }
 }
