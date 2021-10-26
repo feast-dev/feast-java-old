@@ -52,6 +52,11 @@ public class RedisClient implements RedisClientAdapter {
     if (config.getSsl()) {
       uri.setSsl(true);
     }
+
+    if (!config.getPassword().isEmpty()) {
+      uri.setPassword(config.getPassword());
+    }
+    
     StatefulRedisConnection<byte[], byte[]> connection =
         io.lettuce.core.RedisClient.create(uri).connect(new ByteArrayCodec());
 
