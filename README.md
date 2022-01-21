@@ -1,5 +1,7 @@
-# Feast Java components
+# Feast Java components (deprecated)
 [![complete](https://github.com/feast-dev/feast-java/actions/workflows/complete.yml/badge.svg)](https://github.com/feast-dev/feast-java/actions/workflows/complete.yml)
+
+### Note: This repository worked with Feast 0.9 and before. Please look at http://github.com/feast-dev/feast for the more up to date version of this repo.
 
 ### Overview
 
