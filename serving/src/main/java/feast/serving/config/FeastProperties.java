@@ -322,7 +322,9 @@ public class FeastProperties {
       return new RedisClusterStoreConfig(
           this.config.get("connection_string"),
           ReadFrom.valueOf(this.config.get("read_from")),
-          Duration.parse(this.config.get("timeout")));
+          Duration.parse(this.config.get("timeout")),
+          Boolean.valueOf(this.config.getOrDefault("ssl", "false")),
+          this.config.getOrDefault("password", ""));
     }
 
     public RedisStoreConfig getRedisConfig() {
