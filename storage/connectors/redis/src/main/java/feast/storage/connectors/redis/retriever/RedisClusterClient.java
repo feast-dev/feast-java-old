@@ -97,7 +97,7 @@ public class RedisClusterClient implements RedisClientAdapter {
 
     return MappingSocketAddressResolver.create(
         DnsResolvers.UNRESOLVED,
-        hostAndPort -> 
+        hostAndPort ->
             mapAddressHost.keySet().stream().anyMatch(i -> i.equals(hostAndPort.getHostText()))
                 ? hostAndPort.of(
                     mapAddressHost.get(hostAndPort.getHostText()), hostAndPort.getPort())
