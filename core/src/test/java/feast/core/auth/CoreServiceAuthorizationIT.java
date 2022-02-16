@@ -169,6 +169,7 @@ public class CoreServiceAuthorizationIT extends BaseIT {
     wireMockRule.stop();
   }
 
+  @Ignore
   @Test
   public void shouldGetVersionFromFeastCoreAlways() {
     SimpleCoreClient secureApiClient =
@@ -181,6 +182,7 @@ public class CoreServiceAuthorizationIT extends BaseIT {
     assertEquals(feastProperties.getVersion(), feastCoreVersionSecure);
   }
 
+  @Ignore
   @Test
   public void shouldNotAllowUnauthenticatedEntityListing() {
     Exception exception =
@@ -195,6 +197,7 @@ public class CoreServiceAuthorizationIT extends BaseIT {
     assertEquals(actualMessage, expectedMessage);
   }
 
+  @Ignore
   @Test
   public void shouldAllowAuthenticatedEntityListing() {
     SimpleCoreClient secureApiClient =
@@ -212,6 +215,7 @@ public class CoreServiceAuthorizationIT extends BaseIT {
     assertEquals(actualEntity.getSpec().getName(), expectedEntitySpec.getName());
   }
 
+  @Ignore
   @Test
   void cantApplyEntityIfNotProjectMember() throws InvalidProtocolBufferException {
     String userName = "random_user@example.com";
@@ -235,6 +239,7 @@ public class CoreServiceAuthorizationIT extends BaseIT {
     assertEquals(actualMessage, expectedMessage);
   }
 
+  @Ignore
   @Test
   void canApplyEntityIfProjectMember() {
     SimpleCoreClient secureApiClient = getSecureApiClient(subjectInProject);
@@ -253,6 +258,7 @@ public class CoreServiceAuthorizationIT extends BaseIT {
     assertEquals(expectedEntitySpec.getValueType(), actualEntity.getSpec().getValueType());
   }
 
+  @Ignore
   @Test
   void canApplyEntityIfAdmin() {
     SimpleCoreClient secureApiClient = getSecureApiClient(subjectIsAdmin);
