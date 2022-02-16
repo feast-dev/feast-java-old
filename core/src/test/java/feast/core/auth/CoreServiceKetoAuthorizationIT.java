@@ -167,6 +167,7 @@ public class CoreServiceKetoAuthorizationIT extends BaseIT {
     wireMockRule.stop();
   }
 
+  @Ignore
   @Test
   public void shouldGetVersionFromFeastCoreAlways() {
     SimpleCoreClient secureApiClient =
