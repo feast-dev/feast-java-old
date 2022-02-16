@@ -23,11 +23,16 @@ public class RedisClusterStoreConfig {
   private final String connectionString;
   private final ReadFrom readFrom;
   private final Duration timeout;
+  private final String password;
+  private final Boolean ssl;
 
-  public RedisClusterStoreConfig(String connectionString, ReadFrom readFrom, Duration timeout) {
+  public RedisClusterStoreConfig(
+      String connectionString, ReadFrom readFrom, Duration timeout, Boolean ssl, String password) {
     this.connectionString = connectionString;
     this.readFrom = readFrom;
     this.timeout = timeout;
+    this.password = password;
+    this.ssl = ssl;
   }
 
   public String getConnectionString() {
@@ -40,5 +45,13 @@ public class RedisClusterStoreConfig {
 
   public Duration getTimeout() {
     return this.timeout;
+  }
+
+  public String getPassword() {
+    return this.password;
+  }
+
+  public Boolean getSsl() {
+    return this.ssl;
   }
 }

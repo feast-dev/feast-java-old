@@ -1,4 +1,4 @@
 [submodule "deps/feast"]
 	path = deps/feast
 	url = https://github.com/feast-dev/feast
-	branch = master
+	branch = v0.10-branch
