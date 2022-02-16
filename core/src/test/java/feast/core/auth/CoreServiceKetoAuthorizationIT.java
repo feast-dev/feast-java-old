@@ -43,10 +43,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Rule;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -72,6 +70,7 @@ import sh.ory.keto.model.OryAccessControlPolicyRole;
       "feast.security.authorization.options.subjectPrefix=users:",
       "feast.security.authorization.options.resourcePrefix=resources:projects:",
     })
+@Ignore
 public class CoreServiceKetoAuthorizationIT extends BaseIT {
 
   @Autowired FeastProperties feastProperties;
@@ -139,7 +138,7 @@ public class CoreServiceKetoAuthorizationIT extends BaseIT {
     registry.add("feast.security.authorization.options.flavor", () -> DEFAULT_FLAVOR);
   }
 
-  @BeforeAll
+  // @BeforeAll
   public static void globalSetUp(@Value("${grpc.server.port}") int port) {
     feast_core_port = port;
     // Create insecure Feast Core gRPC client
@@ -150,7 +149,7 @@ public class CoreServiceKetoAuthorizationIT extends BaseIT {
     insecureApiClient = new SimpleCoreClient(insecureCoreService);
   }
 
-  @BeforeEach
+  // @BeforeEach
   public void setUp() {
     SimpleCoreClient secureApiClient = getSecureApiClient(subjectIsAdmin);
     EntityProto.EntitySpecV2 expectedEntitySpec =
@@ -162,7 +161,7 @@ public class CoreServiceKetoAuthorizationIT extends BaseIT {
     secureApiClient.simpleApplyEntity(project, expectedEntitySpec);
   }
 
-  @AfterAll
+  // @AfterAll
   static void tearDown() {
     environment.stop();
     wireMockRule.stop();

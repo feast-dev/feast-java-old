@@ -51,6 +51,7 @@ import java.util.stream.Collectors;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LoggerContext;
+import org.junit.Ignore;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
@@ -151,7 +152,7 @@ public class CoreLoggingIT extends BaseIT {
   }
 
   /** Check that expected message audit logs are produced when under load. */
-  @Test
+  @Ignore
   public void shouldProduceExpectedAuditLogsUnderLoad()
       throws InterruptedException, ExecutionException {
     // Generate artifical requests on core to simulate load.
